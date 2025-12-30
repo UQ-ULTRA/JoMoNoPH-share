@@ -13,7 +13,7 @@ The code is designed for batch execution on HPC systems using SLURM.
 ### Data Generation
 
 **Files**
-- `Data-Gen-ENZAMET-01.R` to `Data-Gen-ENZAMET-07.R`
+- `Data-Gen-ENZAMET-01.R` (other files used for other scenarios)
 
 These scripts simulate individual-level trial data:
 
@@ -28,7 +28,7 @@ Event times are generated using AFT-style models (Weibull or log-logistic). A PH
 ### Simulation and Inference Driver
 
 **File**
-- `I2a-ENZAMET.R`
+- `ENZAMET.R`
 
 This script:
 
@@ -66,7 +66,7 @@ All Stan models share the same structure and differ only in how the baseline haz
 
 ### Local testing
 
-For development or debugging, `I2a-ENZAMET.R` can be run locally by manually setting:
+For development or debugging, `ENZAMET.R` can be run locally by manually setting:
 
 - `joint_model_type`
 
@@ -85,7 +85,7 @@ Production runs are launched as SLURM array jobs. Each array task runs one batch
 
 ## Common Configuration Changes
 
-Most changes can be made in `I2a-ENZAMET.R`:
+Most changes can be made in `ENZAMET.R`:
 
 - Baseline hazard model: `joint_model_type`
 
