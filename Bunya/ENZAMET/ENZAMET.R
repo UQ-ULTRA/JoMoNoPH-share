@@ -530,12 +530,13 @@ config_base <- expand.grid(
   n_patients = c(1100),
   aft_mode   = c("Weibull"),
   k_bases    = c(5),
-  scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
+  # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
+  scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
   max_FU     = 72,
   KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
 )
 
-lambda_map <- c(weibull = 0.023, loglogistic = 0.013)
+lambda_map <- c(weibull = 0.023, loglogistic = 0.013) # under scenario 1, give ~50% censoring
 
 cfg_default <- transform(config_base,
                          lambda_c = lambda_map[tolower(aft_mode)])
@@ -547,8 +548,10 @@ config_grid <- rbind(cfg_default, cfg_zero)
 row.names(config_grid) <- NULL
 
 # Define batch structure (e.g. 100 sims per batch, 1000 total sims)
-batch_size <- 100
-sims_per_config <- 1000
+# batch_size <- 100
+# sims_per_config <- 1000
+batch_size <- 10 # try 10 first for testing
+sims_per_config <- 100 # try 100 first for testing
 batches_per_config <- sims_per_config / batch_size  
 
 # Decode SLURM array index into config ID and batch ID
