@@ -1,3 +1,5 @@
+To-do: rewrite the README to better explain the repository structure and usage.
+
 # ENZAMET Joint Modelling Simulation – Short Guide
 
 ## Purpose
