@@ -57,7 +57,7 @@ models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
 bunya <- FALSE
 
 if (bunya==TRUE) {
-  out_dir <- here::here("JoMoNoPH", "Bunya", "ENZAMET", "output")
+  out_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "output")
 } else {
   out_dir <- here::here("Bunya", "ENZAMET", "output")
 }
@@ -748,7 +748,7 @@ message("\n=== SAVING FIGURES ===")
 
 # Create figures directory if it doesn't exist
 fig_dir <- if (bunya==TRUE) {
-  here::here("JoMoNoPH", "Bunya", "ENZAMET", "figures")
+  here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "figures")
 } else {
   here::here("Bunya", "ENZAMET", "figures")
 }
@@ -980,7 +980,7 @@ for (config in configs_to_plot) {
   # ENZAMET data gen files are scenario-specific
   data_gen_file <- sprintf("Data-Gen-ENZAMET-%02d.R", scenario)
   data_gen_path <- if (bunya==TRUE) {
-    here::here("JoMoNoPH", "Bunya", "ENZAMET", data_gen_file)
+    here::here("JoMoNoPH-share", "Bunya", "ENZAMET", data_gen_file)
   } else {
     here::here("Bunya", "ENZAMET", data_gen_file)
   }

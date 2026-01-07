@@ -12,7 +12,7 @@
 # HOW TO READ THIS SCRIPT (SIGNPOSTS):
 #   - Think of this file as an end-to-end pipeline: simulate → fit LME/AFT → fit Stan JM → save batch.
 #   - The ENZAMET data generator is sourced dynamically inside run_simulation() via:
-#       ~/JoMoNoPH/Bunya/ENZAMET/Data-Gen-ENZAMET-XX.R  (scenario = 1..7)
+#       ~/JoMoNoPH-share/Bunya/ENZAMET/Data-Gen-ENZAMET-XX.R  (scenario = 1..7)
 #     so the simulation settings (D, betas, Weibull/loglogistic params, visit schedule, etc.)
 #     come from the chosen generator script for that scenario.
 #   - We retain flexibility for multiple baseline hazard models (BP/GB/GB_Quantile/GP).
@@ -82,10 +82,10 @@ library(cmdstanr)
 library(R.utils)
 
 # Set CmdStan path globally for main session
-set_cmdstan_path("~/cmdstan/cmdstan-2.36.0")
+set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
 
 # Load helper functions
-source("~/JoMoNoPH/Bunya/Auxiliary/BP-functions.R")
+source("~/JoMoNoPH-share/Bunya/Auxiliary/BP-functions.R")
 # ENZAMET data generator will be sourced dynamically based on scenario parameter
 
 ##########
@@ -229,10 +229,10 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
 ##########
 
 run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_hash, joint_model_type = "BP", k_bases = 5, scenario = 2) {
-  set_cmdstan_path("~/cmdstan/cmdstan-2.36.0")
+  set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
   
   # Load the appropriate ENZAMET data generator for this scenario
-  scenario_file <- sprintf("~/JoMoNoPH/Bunya/ENZAMET/Data-Gen-ENZAMET-%02d.R", scenario)
+  scenario_file <- sprintf("~/JoMoNoPH-share/Bunya/ENZAMET/Data-Gen-ENZAMET-%02d.R", scenario)
   source(scenario_file)
   
   # New (globally unique):
@@ -298,13 +298,13 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # Prepare data for joint model (BP, GB, GB_Quantile, or GP)
   if (joint_model_type == "BP") {
-    stan_model_file_joint <- "~/JoMoNoPH/Stan/Bernstein-Polynomials-JM-Hist.stan"
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist.stan"
   } else if (joint_model_type == "GB") {
-    stan_model_file_joint <- "~/JoMoNoPH/Stan/Gaussian-Basis-JM-Hist.stan"
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist.stan"
   } else if (joint_model_type == "GB_Quantile") {
-    stan_model_file_joint <- "~/JoMoNoPH/Stan/Gaussian-Basis-JM-Hist-Quantile.stan"
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist-Quantile.stan"
   } else if (joint_model_type == "GP") {
-    stan_model_file_joint <- "~/JoMoNoPH/Stan/Gaussian-Process-JM-Hist.stan"
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Process-JM-Hist.stan"
   } else {
     stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', or 'GP'.", joint_model_type))
   }
@@ -316,7 +316,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # Add quantile-based knots for GB_Quantile model
   if (joint_model_type == "GB_Quantile") {
-    source("~/JoMoNoPH/Bunya/calculate_quantile_knots.R")
+    source("~/JoMoNoPH-share/Bunya/calculate_quantile_knots.R")
     knots <- calculate_quantile_knots(time = sim_dat$survival$time, m = k_bases, coverage = 0.6)
     stan_data_joint$mu_knots <- knots$mu_knots
     stan_data_joint$sigma_knots <- knots$sigma_knots
@@ -581,7 +581,7 @@ cens_label <- if (lambda_c == 0) "0" else "50"
 ##########
 # ---- Skip work if this batch output already exists ----
 out_file <- sprintf(
-  "~/JoMoNoPH/Bunya/ENZAMET/output/%s_k%d_n%d_cens%s_%s_scen%d_FU%d_batch%03d.rds",
+  "~/JoMoNoPH-share/Bunya/ENZAMET/output/%s_k%d_n%d_cens%s_%s_scen%d_FU%d_batch%03d.rds",
   joint_model_type, k_bases, n_patients, cens_label, aft_mode, scenario, max_FU, batch_id
 )
 

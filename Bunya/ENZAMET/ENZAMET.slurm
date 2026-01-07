@@ -1,7 +1,7 @@
 #!/bin/bash -l 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --nodelist=bun[083-115,126-143]
+##SBATCH --nodelist=bun[083-115,126-143]
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=20
 ## change to 40 for larger simulation
