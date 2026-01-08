@@ -45,7 +45,8 @@ rm(list=ls())
 # Options: "BP", "GB", "GB_Quantile", "GP"
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
-models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
+# models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
+models_to_plot <- c("GB")
 # =============================================================================
 
 ##########
@@ -286,23 +287,23 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
 # ===== Run across all configs =====
 
 # Get all unique config stubs from files (strip last 9 chars before .rds)
-# filenames <- list.files(out_dir, pattern = "\\.rds$")
-# configs <- substr(tools::file_path_sans_ext(filenames),
-#                   1, nchar(tools::file_path_sans_ext(filenames)) - 9) %>%
-#   unique()
-
-# Get all unique config stubs from BP files only (strip last 9 chars before .rds)
-filenames <- list.files(
-  out_dir,
-  pattern = "^BP_.*_loglogistic_scen[1-5]_.*\\.rds$",
-  full.names = FALSE
-)
-
-configs <- substr(
-  tools::file_path_sans_ext(filenames),
-  1, nchar(tools::file_path_sans_ext(filenames)) - 9
-) |>
+filenames <- list.files(out_dir, pattern = "\\.rds$")
+configs <- substr(tools::file_path_sans_ext(filenames),
+                  1, nchar(tools::file_path_sans_ext(filenames)) - 9) %>%
   unique()
+
+# # Get all unique config stubs from BP files only (strip last 9 chars before .rds)
+# filenames <- list.files(
+#   out_dir,
+#   pattern = "^BP_.*_loglogistic_scen[1-5]_.*\\.rds$",
+#   full.names = FALSE
+# )
+# 
+# configs <- substr(
+#   tools::file_path_sans_ext(filenames),
+#   1, nchar(tools::file_path_sans_ext(filenames)) - 9
+# ) |>
+#   unique()
 
 
 print(configs)
