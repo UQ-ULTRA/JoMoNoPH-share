@@ -200,7 +200,7 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
   # Note: beta_long[3] and beta_surv[1] vary by scenario
   # Common values across all scenarios:
   # beta_0 = 73, beta_1 = -0.04, sigma_e = 12
-  # sigma_0 = 15, sigma_1 = 0.20, alpha_AFT = 0.015
+  # sigma_0 = 15, sigma_1 = 0.20, alpha_AFT = 0.012
   # Scenario-specific:
   # Scenario 1: beta_2 = 0.00, log_AF = 0.00
   # Scenario 2: beta_2 = 0.04, log_AF = 0.90
@@ -358,7 +358,7 @@ reference_lines <- tibble::tibble(
   variable = c("beta_long[1]","beta_long[2]","beta_long[3]",
                "sd_1_long[1]","sd_1_long[2]","sigma_long",
                "beta_surv[1]","alpha"),
-  reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0.015)
+  reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0.012)
 )
 
 key_vars <- c("alpha", "beta_long[1]", "beta_long[2]", "beta_long[3]", "beta_surv[1]")
@@ -670,7 +670,7 @@ reference_lines_plot <- tibble::tibble(
   variable = c("beta_long[1]","beta_long[2]",
                "sd_1_long[1]","sd_1_long[2]","sigma_long",
                "alpha"),
-  reference = c(73, -0.04, 15, 0.20, 12, 0.015)
+  reference = c(73, -0.04, 15, 0.20, 12, 0.012)
 )
 
 # Scenario-specific reference values for faceting
