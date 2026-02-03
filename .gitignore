@@ -5,5 +5,7 @@
 .DS_Store
 *.rds
 *.out
+*.png
+*.pdf
 Bunya/ENZAMET/output/
 Bunya/ENZAMET/figures/
