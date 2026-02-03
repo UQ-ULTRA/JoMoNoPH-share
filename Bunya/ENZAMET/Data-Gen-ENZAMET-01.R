@@ -108,7 +108,8 @@ log_AF <- 0.00
 # Association parameter: PH and AFT linkage
 # alpha_PH  <- 99                                # log hazard ratio per unit Y(t)
 # alpha_AFT <- -alpha_PH / weibull_shape            # log acceleration factor per unit Y(t)
-alpha_AFT <- 0.012
+# alpha_AFT <- 0.012
+alpha_AFT <- 0 # try no association 20260113
 
 # Under a Weibull baseline, the AFT-scale association (log time) is derived by
 # dividing the PH-scale association (log hazard) by –shape, preserving consistency across scales.
