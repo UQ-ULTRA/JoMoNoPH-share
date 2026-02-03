@@ -655,30 +655,44 @@ calibrate_lambda_c <- function(target_cens,
 ###### Example usage of calibrate_lambda_c() function ######
 # use the same parameters as what used in the actual simulation to get accurate lambda_c
 res <- calibrate_lambda_c(
-  target_cens = 0.50,
-  seeds = 1:10,
+  target_cens = 0.10,
+  seeds = 1:100, # use 1:100 seeds
   n_patients = 1100,
   n_cores = 8, # adjust based on your machine
   lambda_bounds = c(1e-4, 1),  # initial bounds for lambda_c
   tol = 0.001, # tolerance for difference between target censoring and average censoring proportions
   D = matrix(c(15^2, -0.10, -0.10, 0.20^2), 2, 2),
-  beta_0 = 73, beta_1 = -0.04, beta_2 = 0.00,
+  beta_0 = 73, beta_1 = -0.04,
+  beta_2 = 0, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
   sigma_e = 12,
   log_HR = 99,
   alpha_PH = 99,
-  log_AF = 0.00,
-  alpha_AFT = 0,
+  log_AF = 0, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
+  alpha_AFT = 0, # try no association
   weibull_shape = 0.692,
   weibull_scale = 13.823,
   loglogistic_shape = 1.75,
   loglogistic_scale = 12.0,
   visit = c(0, 1, seq(3, 92, 3)),
   max_FU = 72,
-  aft_mode = "loglogistic",
+  aft_mode = "loglogistic", # loglogistic or Weibull
   link_type = "value"
 )
 
 res$lambda_c
 res$avg_censoring
 
+# calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00), lambda_c = 0.05331733
+# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.0332998
+# scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.0332998
+# scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.08236716
+# scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.08236716
 
+
+# calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00), lambda_c = 0.08114658
+# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.05234087
+# scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.05234087
+# scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.1289934
+# scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.1289934
