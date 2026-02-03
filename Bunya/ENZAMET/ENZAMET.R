@@ -37,6 +37,7 @@
 # - GB: Gaussian Basis baseline hazard (joint model)
 # - GB_Quantile: Gaussian Basis with quantile-based knots (joint model)
 # - GP: Gaussian Process baseline hazard (joint model)
+# - aft_only: AFT model only using Bernstein Polynomials (no joint modeling)
 #
 # IMPORTANT DESIGN NOTES / ASSUMPTIONS:
 # - The survival “staging” model fit by survreg() uses dist = "exponential".
@@ -51,7 +52,7 @@
 # - Timeouts: each trial is capped by an elapsed wall-time limit (safe_elapsed).
 #
 # WHERE TO CHANGE THINGS (COMMON EDIT POINTS):
-# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP"
+# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP" / "aft_only"
 # - Choose basis dimension: k_bases (often overridden by config_grid)
 # - Choose scenarios and censoring: config_base, lambda_map, cfg_default/cfg_zero
 # - Batch sizing: batch_size, sims_per_config
@@ -103,8 +104,8 @@ cpus_per_sim <- chains * threads_per_chain
 # Will be set from config_grid during execution
 k_bases <- 5  # Default, will be overridden
 
-# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", or "GP" (Gaussian Process)
-joint_model_type <- "GB"  # Change to "BP", "GB", "GB_Quantile", or "GP" as needed
+# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), or "aft_only"
+joint_model_type <- "BP"  # Change to "BP", "GB", "GB_Quantile", "GP", or "aft_only" as needed
 
 ##########
 
@@ -296,7 +297,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     x = TRUE
   )
   
-  # Prepare data for joint model (BP, GB, GB_Quantile, or GP)
+  # Prepare data for joint model (BP, GB, GB_Quantile, GP, or aft_only)
   if (joint_model_type == "BP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist.stan"
   } else if (joint_model_type == "GB") {
@@ -305,8 +306,10 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist-Quantile.stan"
   } else if (joint_model_type == "GP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Process-JM-Hist.stan"
+  } else if (joint_model_type == "aft_only") {
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials.stan"
   } else {
-    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', or 'GP'.", joint_model_type))
+    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', or 'aft_only'.", joint_model_type))
   }
   
   stan_data_joint <- convert_data_from_models(fit_long, 
@@ -528,7 +531,7 @@ if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 # ENZAMET uses n_patients=1100, max_FU=72, loglogistic distribution
 config_base <- expand.grid(
   n_patients = c(1100),
-  aft_mode   = c("Weibull"),
+  aft_mode   = c("Weibull"), # current options: "Weibull" and/or "loglogistic"
   k_bases    = c(5),
   # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
   scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
