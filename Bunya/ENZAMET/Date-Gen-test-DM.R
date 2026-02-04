@@ -437,6 +437,30 @@ sim_data <- simulate_joint_dataset(
   aft_mode =  "loglogistic",  # "PH" or "Weibull" or "loglogistic"
   link_type = "value" # "value" or "slope"
 )
+
+# test for aft only data generation
+sim_data <- simulate_joint_dataset(
+  D = matrix(c(0, 0, 0, 0), 2, 2),
+  beta_0 = 0,
+  beta_1 = 0,
+  beta_2 = 0,
+  sigma_e = 0,
+  log_HR = 0,
+  log_AF = 0,
+  alpha_PH = 0,
+  alpha_AFT = 0,
+  weibull_shape= 0.692,
+  weibull_scale= 13.823,
+  loglogistic_shape = 1.75,
+  loglogistic_scale = 12.0,
+  visit = c(0, 1, seq(3, 92, 3)),
+  seed = 32,
+  n_patients = 1100,
+  max_FU = 72,
+  lambda_c = 0, # 0 for no censoring, <0 for administrative censoring only by max_FU
+  aft_mode =  "loglogistic",  # "PH" or "Weibull" or "loglogistic"
+  link_type = "value" # "value" or "slope"
+)
 mean(sim_data$survival$status)
 
 
@@ -696,3 +720,52 @@ res$avg_censoring
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.05234087
 # scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.1289934
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.1289934
+
+
+
+
+
+
+# find lambda_c's for aft only data generation
+res <- calibrate_lambda_c(
+  target_cens = 0.50,
+  seeds = 1:100, # use 1:100 seeds
+  n_patients = 1100,
+  n_cores = 8, # adjust based on your machine
+  lambda_bounds = c(0, 1),  # initial bounds for lambda_c
+  tol = 0.001, # tolerance for difference between target censoring and average censoring proportions
+  D = matrix(c(0^2, 0, 0, 0^2), 2, 2),
+  beta_0 = 0, beta_1 = 0,
+  beta_2 = 0, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
+  sigma_e = 0,
+  log_HR = 0,
+  alpha_PH = 0,
+  log_AF = 0.0, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
+  alpha_AFT = 0, # try no association
+  weibull_shape = 0.692,
+  weibull_scale = 13.823,
+  loglogistic_shape = 1.75,
+  loglogistic_scale = 12.0,
+  visit = c(0, 1, seq(3, 92, 3)),
+  max_FU = 72,
+  aft_mode = "Weibull", # loglogistic or Weibull
+  link_type = "value"
+)
+
+res$lambda_c
+res$avg_censoring
+
+# calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00), lambda_c = 0.08203125
+# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.05175781
+# scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.05175781
+# scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.1298828
+# scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.1298828
+
+# calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00), lambda_c = 0.05322266
+# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.03295898
+# scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.03295898
+# scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.08300781
+# scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.08300781
+
