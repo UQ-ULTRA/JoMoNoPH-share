@@ -37,6 +37,7 @@
 # - GB: Gaussian Basis baseline hazard (joint model)
 # - GB_Quantile: Gaussian Basis with quantile-based knots (joint model)
 # - GP: Gaussian Process baseline hazard (joint model)
+# - aft_only_BP_noRP: AFT model only using Bernstein Polynomials (no joint modelling)
 #
 # IMPORTANT DESIGN NOTES / ASSUMPTIONS:
 # - The survival “staging” model fit by survreg() uses dist = "exponential".
@@ -51,7 +52,7 @@
 # - Timeouts: each trial is capped by an elapsed wall-time limit (safe_elapsed).
 #
 # WHERE TO CHANGE THINGS (COMMON EDIT POINTS):
-# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP"
+# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP" / "aft_only_BP_noRP"
 # - Choose basis dimension: k_bases (often overridden by config_grid)
 # - Choose scenarios and censoring: config_base, lambda_map, cfg_default/cfg_zero
 # - Batch sizing: batch_size, sims_per_config
@@ -103,8 +104,8 @@ cpus_per_sim <- chains * threads_per_chain
 # Will be set from config_grid during execution
 k_bases <- 5  # Default, will be overridden
 
-# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", or "GP" (Gaussian Process)
-joint_model_type <- "BP"  # Change to "BP", "GB", "GB_Quantile", or "GP" as needed
+# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), or "aft_only_BP_noRP (BP without roughness penalty)"
+joint_model_type <- "aft_only_BP_noRP"  # Change to "BP", "GB", "GB_Quantile", "GP", or "aft_only_BP_noRP" as needed
 
 ##########
 
@@ -210,7 +211,7 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
     s_surv = s_surv,
     alpha_tilde_sd = alpha_tilde_sd,
     
-    # Priors for gamma scaling only â all others left unstandardized
+    # Priors for gamma scaling only, all others left unstandardized
     location_beta_real = 0,
     scale_beta_real = 1,
     std_real = 1,
@@ -240,15 +241,24 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # Generate data using ENZAMET data generator
   sim_dat <- simulate_joint_dataset(
-    D = D,
-    beta_0 = beta_0,
-    beta_1 = beta_1,
-    beta_2 = beta_2,
-    sigma_e = sigma_e,
-    log_HR = log_HR,
-    log_AF = log_AF,
-    alpha_PH = alpha_PH,
-    alpha_AFT = alpha_AFT,
+    # D = D,
+    # beta_0 = beta_0,
+    # beta_1 = beta_1,
+    # beta_2 = beta_2,
+    # sigma_e = sigma_e,
+    D = matrix(c(0^2, 0, 0, 0^2), 2, 2),
+    beta_0 = 0,
+    beta_1 = 0,
+    beta_2 = 0,
+    sigma_e = 0,
+    # log_HR = log_HR,
+    # log_AF = log_AF,
+    log_HR = 0,
+    log_AF = 0,
+    # alpha_PH = alpha_PH,
+    # alpha_AFT = alpha_AFT,
+    alpha_PH = 0,
+    alpha_AFT = 0,
     weibull_shape = weibull_shape,
     weibull_scale = weibull_scale,
     loglogistic_shape = loglogistic_shape, 
@@ -296,17 +306,20 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     x = TRUE
   )
   
-  # Prepare data for joint model (BP, GB, GB_Quantile, or GP)
+  # Prepare data for joint model (BP, GB, GB_Quantile, GP, or aft_only_BP_noRP)
   if (joint_model_type == "BP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist.stan"
+    # stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-DM.stan"  # 20260129
   } else if (joint_model_type == "GB") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist.stan"
   } else if (joint_model_type == "GB_Quantile") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist-Quantile.stan"
   } else if (joint_model_type == "GP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Process-JM-Hist.stan"
+  } else if (joint_model_type == "aft_only_BP_noRP") {
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials.stan"
   } else {
-    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', or 'GP'.", joint_model_type))
+    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', or 'aft_only_BP_noRP'.", joint_model_type))
   }
   
   stan_data_joint <- convert_data_from_models(fit_long, 
@@ -529,20 +542,47 @@ if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 config_base <- expand.grid(
   n_patients = c(1100),
   aft_mode   = c("Weibull"), # current options: "Weibull" and/or "loglogistic"
-  k_bases    = c(5),
+  k_bases    = c(5), # change from 5 to 10 on 20260128
   # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
-  scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
+  # scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
+  scenario   = c(2, 4),  # Data generation scenarios for aft only
   max_FU     = 72,
   KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
 )
 
-lambda_map <- c(weibull = 0.023, loglogistic = 0.013) # under scenario 1, give ~50% censoring
+# lambda_map <- c(weibull = 0.023, loglogistic = 0.013) # under scenario 1, give ~50% censoring
 
-cfg_default <- transform(config_base,
-                         lambda_c = lambda_map[tolower(aft_mode)])
+lambda_table <- data.frame( # need different lambda_c values for different scenarios
+  scenario = rep(1:5, each = 2),
+  aft_mode = rep(c("Weibull", "loglogistic"), times = 5),
+  lambda_c = c(
+    # scenario 1
+    0.08203125, 0.05322266, # for aft only and 50% censoring
+    # scenario 2
+    0.05175781, 0.03295898, # for aft only and 50% censoring
+    # scenario 3
+    0.05175781, 0.03295898, # for aft only and 50% censoring
+    # scenario 4
+    0.1298828, 0.08300781, # for aft only and 50% censoring
+    # scenario 5
+    0.1298828, 0.08300781 # for aft only and 50% censoring
+  ),
+  stringsAsFactors = FALSE
+)
+
+
+# cfg_default <- transform(config_base,
+#                          lambda_c = lambda_map[tolower(aft_mode)])
+cfg_default <- merge(
+  config_base,
+  lambda_table,
+  by = c("scenario", "aft_mode"),
+  all.x = TRUE,
+  sort = FALSE
+)
 
 cfg_zero <- transform(config_base,
-                      lambda_c = 0)
+                      lambda_c = 0) # 0 for no censoring, any value <0 for administrative censoring
 
 config_grid <- rbind(cfg_default, cfg_zero)
 row.names(config_grid) <- NULL
