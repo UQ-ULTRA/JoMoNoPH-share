@@ -51,7 +51,10 @@
 #   seed:            Random seed
 #   n_patients:      Total sample size (must be even for 1:1 allocation)
 #   max_FU:          Maximum follow-up time
-#   lambda_c:        Exponential censoring rate (optional; calibrated if required)
+#   lambda_c:        Exponential censoring rate (optional; calibrated if required):
+#                    <0 for administrative censoring, controlled by max_FU
+#                    =0 for no censoring
+#                    >0 for random censoring + administrative censoring
 #
 # ------------------------------------------------------------
 
@@ -350,11 +353,15 @@ simulate_joint_dataset <- function(D,
       stop("Invalid aft_mode")
     }
     
-    status <- as.integer(T_i <= max_FU)
-    T_obs <- min(T_i, max_FU)
-
+    # status <- as.integer(T_i <= max_FU)
+    # T_obs <- min(T_i, max_FU)
+    
+    if (lambda_c == 0) {
+    # No censoring
+      T_obs <- T_i
+      status <- 1L
     ## --- Independent exponential censoring + administrative censoring ---
-    if (!is.null(lambda_c) && is.finite(lambda_c) && lambda_c > 0) {
+    } else if (!is.null(lambda_c) && is.finite(lambda_c) && lambda_c > 0) {
       C_i   <- rexp(1, rate = lambda_c)
       T_obs <- min(T_i, C_i, max_FU)
       status <- as.integer(T_i <= C_i & T_i <= max_FU)
