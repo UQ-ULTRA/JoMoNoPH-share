@@ -665,6 +665,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
 
 # Read job ID from environment
 sim_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "0"))
+message(sprintf("SLURM_ARRAY_TASK_ID (also the sim_id): %d", sim_id))
 if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
 # Define configuration grid for ENZAMET
@@ -675,7 +676,8 @@ config_base <- expand.grid(
   k_bases    = c(5), # change from 5 to 10 on 20260128
   # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
   # scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
-  scenario   = c(1, 2, 4),  # Data generation scenarios for aft only
+  # scenario   = c(1, 2, 4),  # Data generation scenarios for aft only
+  scenario   = c(1, 2),  # Data generation scenarios for aft only
   max_FU     = 72,
   KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
 )
@@ -739,9 +741,14 @@ scenario <- config$scenario
 trial_ids <- ((batch_id - 1) * batch_size + 1):(batch_id * batch_size)
 
 # Hash the config (e.g., using integers from factors)
-config_hash <- as.integer(as.numeric(as.factor(
-  paste(n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU, sep = "_")
-)))
+# config_hash <- as.integer(as.numeric(as.factor(
+#   paste(n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU, sep = "_")
+# )))
+config_hash <- config_id # use config_id as hash since it's already a unique integer identifier for the config
+# print config and config_hash for debugging
+message(sprintf("Config ID: %d, Config Hash: %d, n_patients:
+%d, lambda_c: %.5f, aft_mode: %s, k_bases: %d, scenario: %d, max_FU: %d",
+config_id, config_hash, n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU))
 
 # label for censoring used in filename & messages
 cens_label <- if (lambda_c == 0) "0" else "50"
