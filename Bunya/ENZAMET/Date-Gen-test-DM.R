@@ -143,7 +143,7 @@ library(simsurv)
 # lambda_c <- lambda_c_new
 
 
-#--- Simulation Function ---
+####--- Simulation Function ---####
 simulate_joint_dataset <- function(D, 
                                    beta_0, beta_1, beta_2, sigma_e,
                                    log_HR, alpha_PH, log_AF, alpha_AFT, 
@@ -151,7 +151,7 @@ simulate_joint_dataset <- function(D,
                                    loglogistic_shape, loglogistic_scale,
                                    visit, seed, n_patients, max_FU, lambda_c,  
                                    aft_mode, link_type) {
-  
+  browser()
   if (!is.null(seed)) set.seed(seed)
   id <- 1:n_patients
   arm <- rep(0:1, each = n_patients / 2)
@@ -725,11 +725,13 @@ res$avg_censoring
 
 
 
-
+# seeds = 1e6 * as.integer(as.numeric(as.factor(paste(n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU, sep = "_")))) + 1:
+# seeds = 1e6 * as.integer(as.numeric(as.factor(paste(c(1100), c(0.05322266, 0.03295898, 0.08300781), c("Weibull", "loglogistic"), c(5), c(1,2,4), c(72), sep = "_"))))
 # find lambda_c's for aft only data generation
 res <- calibrate_lambda_c(
   target_cens = 0.50,
-  seeds = 1:100, # use 1:100 seeds
+  # seeds = 1:100, # use 1:100 seeds
+  seeds = 1:500, # use 1:100 seeds
   n_patients = 1100,
   n_cores = 8, # adjust based on your machine
   lambda_bounds = c(0, 1),  # initial bounds for lambda_c
@@ -740,7 +742,7 @@ res <- calibrate_lambda_c(
   sigma_e = 0,
   log_HR = 0,
   alpha_PH = 0,
-  log_AF = 0.0, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
+  log_AF = -0.90, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
   alpha_AFT = 0, # try no association
   weibull_shape = 0.692,
   weibull_scale = 13.823,
@@ -748,7 +750,7 @@ res <- calibrate_lambda_c(
   loglogistic_scale = 12.0,
   visit = c(0, 1, seq(3, 92, 3)),
   max_FU = 72,
-  aft_mode = "Weibull", # loglogistic or Weibull
+  aft_mode = "loglogistic", # loglogistic or Weibull
   link_type = "value"
 )
 
@@ -764,8 +766,17 @@ res$avg_censoring
 
 # calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00), lambda_c = 0.05322266
-# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.03295898
+# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.03295898; (1e6*1+1):(1e6*1+100) seeds produce lambda_c = 0.03320312
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.03295898
 # scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.08300781
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.08300781
+
+
+
+# calibration results (log-logistic, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0): 
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00), lambda_c = 0.05322266
+# scenario 2 (beta_2 = 0.04, log_AF = 0.90), lambda_c = 0.03320312
+# scenario 3 (beta_2 = -0.04, log_AF = 0.90), lambda_c = 0.03320312
+# scenario 4 (beta_2 = 0.04, log_AF = -0.90), lambda_c = 0.08251953
+# scenario 5 (beta_2 = -0.04, log_AF = -0.90), lambda_c = 0.08251953
 
