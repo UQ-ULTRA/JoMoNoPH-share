@@ -82,6 +82,10 @@ library(simsurv)
 library(cmdstanr)
 library(R.utils)
 
+library(aftgee) # alternative semiparametric AFT model
+library(smoothSurv) # alternative semiparametric AFT model
+library(rstpm2) # alternative semiparametric AFT model
+
 # Set CmdStan path globally for main session
 set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
 
@@ -301,18 +305,16 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     # beta_1 = beta_1,
     # beta_2 = beta_2,
     # sigma_e = sigma_e,
-    D = matrix(c(0^2, 0, 0, 0^2), 2, 2),
+    D = matrix(c(0^2, 0, 0, 0^2), 2, 2), # CAUTION: overwrite values for aft only scenarios
     beta_0 = 0,
     beta_1 = 0,
     beta_2 = 0,
     sigma_e = 0,
-    # log_HR = log_HR,
-    # log_AF = log_AF,
-    log_HR = 0,
-    log_AF = 0,
+    log_HR = log_HR, # beta_surv = log_HR for PH models, should always be set in the data generator, double check the data generator files
+    log_AF = log_AF, # beta_surv = log_AF for AFT models, should always be set in the data generator, double check the data generator files
     # alpha_PH = alpha_PH,
     # alpha_AFT = alpha_AFT,
-    alpha_PH = 0,
+    alpha_PH = 0, # CAUTION: overwrite values for aft only scenarios
     alpha_AFT = 0,
     weibull_shape = weibull_shape,
     weibull_scale = weibull_scale,
@@ -353,6 +355,42 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   # ------------------------------------------------------------------------------ 
   sim_dat$survival <- sim_dat$survival %>%
     dplyr::rename(time = T_obs)
+  
+  
+  #### fit alternative semiparametric AFT models (aftgee, aftssr, smoothSurv, rstpm2) ####
+  # least-square-based method (with bootstrap method for variance estimation)
+  fit_aftgee <- tryCatch({
+    aftgee::aftgee(Surv(time, status) ~ arm, data = sim_dat$survival)
+  }, error = function(e) {
+    message("aftgee fit failed: ", e$message)
+    NULL
+  })
+  beta_surv_aftgee = fit_aftgee$coef.res[-1]
+  # rank-based method (with induced smoothing method for variance estimation)
+  fit_aftsrr <- tryCatch({
+    aftgee::aftsrr(Surv(time, status) ~ arm, data = sim_dat$survival, se = "ISMB")
+  }, error = function(e) {
+    message("aftgee fit failed: ", e$message)
+    NULL
+  })
+  beta_surv_aftsrr = fit_aftsrr$beta
+  # Komarek's likelihood-based error distribution smoothing method
+  fit_smoothSurv <- tryCatch({
+    smoothSurv::smoothSurvReg(Surv(time, status) ~ arm, data = sim_dat$survival)
+  }, error = function(e) {
+    message("smoothSurv fit failed: ", e$message)
+    NULL
+  })
+  beta_surv_smoothSurv = fit_smoothSurv$regres[-c(1, NROW(fit_smoothSurv$regres)-1, NROW(fit_smoothSurv$regres)), 1]
+  # Crowther et al. (2022) flexible parametric AFT method
+  fit_rstpm2 <- tryCatch({
+    rstpm2::aft(Surv(time, status) ~ arm, data = sim_dat$survival, df = k_bases)
+  }, error = function(e) {
+    message("rstpm2 fit failed: ", e$message)
+    NULL
+  })
+  # beta_surv_rstpm2 = summary(fit_rstpm2)@coef[-((NROW(summary(fit_rstpm2)@coef)-k_bases+1):NROW(summary(fit_rstpm2)@coef)),1]
+  beta_surv_rstpm2 = fit_rstpm2@coef[-c((length(fit_rstpm2@coef)-4+1):length(fit_rstpm2@coef))]
   
   # ------------------------------------------------------------------------------ 
   # Fit survival model on raw variables 
@@ -649,6 +687,12 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   return(list(
     censor_prop = mean(sim_dat$survival$status == 0),
+    unique_seed = unique_seed,
+    fit_aftgee = fit_aftgee,
+    fit_aftsrr = fit_aftsrr,
+    fit_smoothSurv = fit_smoothSurv,
+    fit_rstpm2 = fit_rstpm2,
+    beta_sAFT = rbind(beta_surv_aftgee, beta_surv_aftsrr, beta_surv_smoothSurv, beta_surv_rstpm2),
     joint_summary = summ_joint,
     joint_diagnostics = diag_joint,
     lme_coefs = coefs,
@@ -676,8 +720,7 @@ config_base <- expand.grid(
   k_bases    = c(5), # change from 5 to 10 on 20260128
   # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
   # scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
-  # scenario   = c(1, 2, 4),  # Data generation scenarios for aft only
-  scenario   = c(1, 2),  # Data generation scenarios for aft only
+  scenario   = c(1, 2, 4),  # Data generation scenarios for aft only
   max_FU     = 72,
   KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
 )
@@ -690,13 +733,13 @@ lambda_table <- data.frame( # need different lambda_c values for different scena
     # scenario 1
     0.08203125, 0.05322266, # for aft only and 50% censoring
     # scenario 2
-    0.05175781, 0.03295898, # for aft only and 50% censoring
+    0.05175781, 0.03320312, # for aft only and 50% censoring
     # scenario 3
-    0.05175781, 0.03295898, # for aft only and 50% censoring
+    0.05175781, 0.03320312, # for aft only and 50% censoring
     # scenario 4
-    0.1298828, 0.08300781, # for aft only and 50% censoring
+    0.1298828, 0.08251953, # for aft only and 50% censoring
     # scenario 5
-    0.1298828, 0.08300781 # for aft only and 50% censoring
+    0.1298828, 0.08251953 # for aft only and 50% censoring
   ),
   stringsAsFactors = FALSE
 )
