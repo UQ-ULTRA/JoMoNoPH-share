@@ -45,7 +45,8 @@ rm(list=ls())
 # Options: "BP", "GB", "GB_Quantile", "GP"
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
-models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
+# models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
+models_to_plot <- c("aft_only_BP_noRP")
 # =============================================================================
 
 ##########
@@ -57,9 +58,11 @@ models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
 bunya <- FALSE
 
 if (bunya==TRUE) {
-  out_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "output")
+  # out_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "output")
+  out_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "output_20260216_21323123")
 } else {
-  out_dir <- here::here("Bunya", "ENZAMET", "output")
+  # out_dir <- here::here("Bunya", "ENZAMET", "output")
+  out_dir <- here::here("Bunya", "ENZAMET", "output_20260216_21323123")
 }
 
 # out_dir <- "C:/Users/uqamar43/OneDrive - The University of Queensland/02 shared HERA ULTRA/04 Stat Methods/08 JoMoNoPH/Biometrical-Journal/Sim-Results"
@@ -121,6 +124,7 @@ parse_config <- function(config_str) {
 # --- Main: process all sims for a single config
 process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
                                        output_dir) {
+  
   # Build filename pattern for this config
   fu_part <- if (!is.null(fu) && !is.na(fu) && nzchar(fu)) {
     paste0("_", fu)
@@ -143,7 +147,7 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
     message("No matching files found for: ", pattern)
     return(NULL)
   }
-  
+  # browser()
   # ---- Read all batches; flatten to one list of sims; drop NULLs (timeouts/failures)
   sims <- rds_files %>%
     purrr::map(readRDS) %>%
@@ -183,6 +187,88 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
   all_summaries <- dplyr::bind_rows(all_summaries_list)
   
   
+  # ---- Extract semiparametric / parametric AFT beta estimates per sim
+  if (models_to_plot == "aft_only_BP_noRP") {
+    beta_saft_per_sim <- purrr::imap_dfr(sims, function(sim, idx) {
+      
+      if (is.null(sim$beta_sAFT)) return(NULL)
+      
+      beta_mat <- sim$beta_sAFT
+      
+      # Ensure matrix with method names
+      beta_df <- as.data.frame(beta_mat)
+      beta_df$method <- rownames(beta_mat)
+      
+      beta_df %>%
+        pivot_longer(
+          cols = -method,
+          names_to = "parameter",
+          values_to = "estimate"
+        ) %>%
+        mutate(
+          sim_id = idx
+        )
+    })
+    # Attach true values (scenario-dependent)
+    true_beta_aft <- c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]
+    # enrich the long table
+    beta_saft_per_sim <- beta_saft_per_sim %>%
+      mutate(truth = true_beta_aft, bias = estimate - truth)
+    # Aggregate across simulation replicates
+    beta_saft_summary <- beta_saft_per_sim %>%
+      group_by(method, parameter) %>%
+      summarise(
+        Mean     = mean(estimate, na.rm = TRUE),
+        SD       = sd(estimate, na.rm = TRUE),
+        Bias     = mean(bias, na.rm = TRUE),
+        RMSE     = sqrt(mean(bias^2, na.rm = TRUE)),
+        n_sims   = n(),
+        .groups  = "drop"
+      ) %>%
+      mutate(Source = "AFT (frequentist)")
+  }
+  
+  
+  # ---- Extract censoring proportion and R-hat diagnostics per sim
+  diag_per_sim <- purrr::imap_dfr(sims, function(sim, idx) {
+    
+    # Skip failed sims
+    if (is.null(sim$joint_summary)) return(NULL)
+    
+    rhat <- sim$joint_summary$rhat
+    rhat <- rhat[is.finite(rhat)]
+    
+    tibble::tibble(
+      sim_id          = idx,
+      censor_prop     = sim$censor_prop,
+      unique_seed     = sim$unique_seed,
+      max_rhat        = max(rhat, na.rm = TRUE),
+      mean_rhat       = mean(rhat, na.rm = TRUE),
+      median_rhat     = median(rhat, na.rm = TRUE),
+      sd_rhat         = sd(rhat, na.rm = TRUE),
+      n_rhat_gt_1_01  = sum(rhat > 1.01, na.rm = TRUE),
+      n_rhat_gt_1_05  = sum(rhat > 1.05, na.rm = TRUE)
+    )
+  })
+  # ---- Aggregate diagnostics across replicates
+  diag_summary <- diag_per_sim %>%
+    summarise(
+      mean_censor_prop = mean(censor_prop),
+      sd_censor_prop   = sd(censor_prop),
+      
+      mean_max_rhat    = mean(max_rhat),
+      max_max_rhat     = max(max_rhat),
+      
+      mean_mean_rhat   = mean(mean_rhat),
+      mean_median_rhat = mean(median_rhat),
+      
+      mean_n_rhat_gt_1_01 = mean(n_rhat_gt_1_01),
+      mean_n_rhat_gt_1_05 = mean(n_rhat_gt_1_05),
+      
+      n_sims = n()
+    )
+  
+  
   # Filter parameters of interest (including GP-specific parameters)
   filtered_data <- all_summaries %>%
     dplyr::filter(stringr::str_detect(variable, "rho|alpha|beta_|sigma_long|sd_1_long|gamma|sigma|gp_length_scale|gp_marginal_sd|f_gp"))
@@ -200,27 +286,45 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
   # Note: beta_long[3] and beta_surv[1] vary by scenario
   # Common values across all scenarios:
   # beta_0 = 73, beta_1 = -0.04, sigma_e = 12
-  # sigma_0 = 15, sigma_1 = 0.20, alpha_AFT = 0.015
+  # sigma_0 = 15, sigma_1 = 0.20, alpha_AFT = 0.012
   # Scenario-specific:
   # Scenario 1: beta_2 = 0.00, log_AF = 0.00
   # Scenario 2: beta_2 = 0.04, log_AF = 0.90
-  # Scenario 3: beta_2 = -0.04, log_AF = -0.90
-  # ---- TRUE VALUES (scenarios 1–5 only), from supplied true_params ----
+  # Scenario 3: beta_2 = -0.04, log_AF = 0.90
+  # Scenario 4: beta_2 = 0.04, log_AF = -0.90
+  # Scenario 5: beta_2 = -0.04, log_AF = -0.90
+  #### TRUE VALUES (scenarios 1–5 only), from supplied true_params ####
   stopifnot(scenario %in% 1:5)
   
-  true_values <- c(
-    "beta_long[1]"  = 73,     # beta_0
-    "beta_long[2]"  = -0.04,  # beta_1
-    "beta_long[3]"  = c(0.00, 0.04, -0.04, 0.04, -0.04)[scenario],  # beta_2 (scen 1–5)
-    
-    "sd_1_long[1]"  = 15,     # sigma_b0
-    "sd_1_long[2]"  = 0.2,    # sigma_b1
-    "sigma_long"    = 12,     # sigma_epsilon
-    
-    "alpha"         = 0.012,  # alpha (scen 1–5)
-    "beta_surv[1]"  = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]   # gamma_1 (scen 1–5)
-  )
-  
+  if (models_to_plot == "aft_only_BP_noRP") {
+    true_values <- c(
+      "beta_long[1]"  = 0,     # beta_0
+      "beta_long[2]"  = 0,  # beta_1
+      "beta_long[3]"  = c(0, 0, 0, 0, 0)[scenario],  # beta_2 (scen 1–5)
+      
+      "sd_1_long[1]"  = 0,     # sigma_b0
+      "sd_1_long[2]"  = 0,    # sigma_b1
+      "sigma_long"    = 0,     # sigma_epsilon
+      
+      # "alpha"         = 0.012,  # alpha (scen 1–5)
+      "alpha"         = 0,      # try no association 20260113
+      "beta_surv[1]"  = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]   # gamma_1 (scen 1–5)
+    )
+  } else {
+    true_values <- c(
+      "beta_long[1]"  = 73,     # beta_0
+      "beta_long[2]"  = -0.04,  # beta_1
+      "beta_long[3]"  = c(0.00, 0.04, -0.04, 0.04, -0.04)[scenario],  # beta_2 (scen 1–5)
+      
+      "sd_1_long[1]"  = 15,     # sigma_b0
+      "sd_1_long[2]"  = 0.2,    # sigma_b1
+      "sigma_long"    = 12,     # sigma_epsilon
+      
+      # "alpha"         = 0.012,  # alpha (scen 1–5)
+      "alpha"         = 0,      # try no association 20260113
+      "beta_surv[1]"  = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]   # gamma_1 (scen 1–5)
+    ) 
+  }
   
   # Compute coverage: check if true value is within [q2.5, q97.5] for each sim
   coverage_data <- filtered_data %>%
@@ -273,7 +377,11 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
     fig           = fig_hist,        # diagnostic histograms
     table         = table,           # Stan summary table
     filtered_data = filtered_data,   # long Stan posterior means per sim
-    summary       = combined_summary # aggregated table (Stan only)
+    summary       = combined_summary, # aggregated table (Stan only)
+    diag_per_sim  = diag_per_sim,    # NEW
+    diag_summary  = diag_summary,    # NEW
+    beta_saft_raw    = beta_saft_per_sim,     # NEW
+    beta_saft_summary = beta_saft_summary     # NEW
   )
 }
 
@@ -286,7 +394,8 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
 # ===== Run across all configs =====
 
 # Get all unique config stubs from files (strip last 9 chars before .rds)
-filenames <- list.files(out_dir, pattern = "\\.rds$")
+stopifnot(dir.exists(out_dir))
+filenames <- list.files(out_dir, pattern = "\\.[rR][dD][sS]$")
 configs <- substr(tools::file_path_sans_ext(filenames),
                   1, nchar(tools::file_path_sans_ext(filenames)) - 9) %>%
   unique()
@@ -326,6 +435,64 @@ results_by_config <- purrr::compact(
     })
 )
 
+
+# ---- Combine diagnostic summaries across configs
+all_diag_summary <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$diag_summary, config = .y)
+)
+all_diag_summary
+# diagnostic plot: boxplot of max R-hat per config
+# long form, useful for boxplots of max_rhat or realised censoring
+all_diag_per_sim <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$diag_per_sim, config = .y)
+)
+
+shorten_config_1 <- function(config) {
+  
+  tibble::tibble(config = config) %>%
+    dplyr::mutate(
+      model = stringr::str_replace(config, "_k\\d+.*$", ""),
+      k     = stringr::str_extract(config, "k\\d+"),
+      n     = stringr::str_extract(config, "n\\d+"),
+      dist  = stringr::str_extract(config, "Weibull|loglogistic"),
+      FU    = stringr::str_extract(config, "FU\\d+")
+    ) %>%
+    dplyr::mutate(
+      label = paste(model, k, n, dist, FU, sep = ", ")
+    ) %>%
+    dplyr::pull(label)
+}
+all_diag_per_sim <- all_diag_per_sim %>%
+  dplyr::mutate(cfg_short = shorten_config_1(config))
+all_diag_per_sim <- all_diag_per_sim %>%
+  dplyr::mutate(
+    cens = stringr::str_extract(config, "cens\\d+"),
+    scen = stringr::str_extract(config, "scen\\d+")
+  )
+all_diag_per_sim <- all_diag_per_sim %>%
+  dplyr::mutate(
+    cens = factor(cens, levels = c("cens0", "cens50"),
+                  labels = c("0% censoring", "50% censoring")),
+    scen = factor(scen)
+  )
+ggplot(all_diag_per_sim, aes(x = cfg_short, y = max_rhat)) +
+  geom_boxplot() +
+  # coord_flip() +
+  facet_grid(cens ~ scen) +
+  labs(
+    y = "Maximum R-hat per replicate",
+    x = "Model configuration"
+  )
+# diagnostic plot: histogram of censoring proportions across sims, faceted by config
+ggplot(all_diag_per_sim, aes(x = censor_prop)) +
+  geom_histogram(bins = 20) +
+  facet_wrap(~ shorten_config_1(config))
+
+
 # Build a long table of summaries with the config label attached
 all_summary_tables <- purrr::map2_dfr(
   results_by_config, names(results_by_config),
@@ -354,12 +521,22 @@ if (nrow(summary_wide) > 0) {
 }
 
 # Base reference lines (scenario-independent parameters)
-reference_lines <- tibble::tibble(
-  variable = c("beta_long[1]","beta_long[2]","beta_long[3]",
-               "sd_1_long[1]","sd_1_long[2]","sigma_long",
-               "beta_surv[1]","alpha"),
-  reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0.015)
-)
+if (models_to_plot == "aft_only_BP_noRP") {
+  reference_lines <- tibble::tibble(
+    variable = c("beta_long[1]","beta_long[2]","beta_long[3]",
+                 "sd_1_long[1]","sd_1_long[2]","sigma_long",
+                 "beta_surv[1]","alpha"),
+    reference = c(0, 0, 0, 0, 0, 0, NA, 0)
+  )
+} else {
+  reference_lines <- tibble::tibble(
+    variable = c("beta_long[1]","beta_long[2]","beta_long[3]",
+                 "sd_1_long[1]","sd_1_long[2]","sigma_long",
+                 "beta_surv[1]","alpha"),
+    # reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0.012)
+    reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0) # try no association 20260113
+  )
+}
 
 key_vars <- c("alpha", "beta_long[1]", "beta_long[2]", "beta_long[3]", "beta_surv[1]")
 
@@ -379,15 +556,20 @@ if (nrow(all_summary_tables) > 0) {
         variable == "beta_long[3]" & scenario == 1 ~ 0.00,
         variable == "beta_long[3]" & scenario == 2 ~ 0.04,
         variable == "beta_long[3]" & scenario == 3 ~ -0.04,
-        variable == "beta_long[3]" & scenario == 4 ~ 0.08,
-        variable == "beta_long[3]" & scenario == 5 ~ -0.08,
+        # variable == "beta_long[3]" & scenario == 4 ~ 0.08,
+        variable == "beta_long[3]" & scenario == 4 ~ 0.04,
+        # variable == "beta_long[3]" & scenario == 5 ~ -0.08,
+        variable == "beta_long[3]" & scenario == 5 ~ -0.04,
         variable == "beta_long[3]" & scenario == 6 ~ 0.12,
         variable == "beta_long[3]" & scenario == 7 ~ -0.12,
         variable == "beta_surv[1]" & scenario == 1 ~ 0.00,
         variable == "beta_surv[1]" & scenario == 2 ~ 0.90,
-        variable == "beta_surv[1]" & scenario == 3 ~ -0.90,
-        variable == "beta_surv[1]" & scenario == 4 ~ 1.80,
-        variable == "beta_surv[1]" & scenario == 5 ~ -1.80,
+        # variable == "beta_surv[1]" & scenario == 3 ~ -0.90,
+        variable == "beta_surv[1]" & scenario == 3 ~ 0.90,
+        # variable == "beta_surv[1]" & scenario == 4 ~ 1.80,
+        variable == "beta_surv[1]" & scenario == 4 ~ -0.90,
+        # variable == "beta_surv[1]" & scenario == 5 ~ -1.80,
+        variable == "beta_surv[1]" & scenario == 5 ~ -0.90,
         variable == "beta_surv[1]" & scenario == 6 ~ 2.70,
         variable == "beta_surv[1]" & scenario == 7 ~ -2.70,
         TRUE ~ reference
@@ -398,9 +580,9 @@ if (nrow(all_summary_tables) > 0) {
     )
   
   results_tab2 <- results_tab
-  
+  # publication-ready table
   nice_tab_wide <- results_tab2 %>%
-    filter(
+    dplyr::filter(
       variable %in% key_vars,
       source == "Stan posterior"
     ) %>%
@@ -442,7 +624,7 @@ if (nrow(all_summary_tables) > 0) {
   # Create gamma summary tables for basis weights (BP/GB/GB_Quantile only)
   # GP model uses different parameters (gp_length_scale, gp_marginal_sd, f_gp)
   gamma_tab_wide <- results_tab2 %>%
-    filter(
+    dplyr::filter(
       stringr::str_detect(variable, "^gamma\\["),
       source == "Stan posterior"
     ) %>%
@@ -471,7 +653,7 @@ if (nrow(all_summary_tables) > 0) {
   
   # Create GP-specific parameter summary table
   gp_tab_wide <- results_tab2 %>%
-    filter(
+    dplyr::filter(
       stringr::str_detect(variable, "^(gp_length_scale|gp_marginal_sd)$"),
       source == "Stan posterior"
     ) %>%
@@ -582,6 +764,55 @@ if (nrow(all_summary_tables) > 0) {
   
 } # end if (nrow(all_summary_tables) > 0)
 
+# ---- Combine sAFT beta_surv across configurations
+if (models_to_plot == "aft_only_BP_noRP") {
+  all_beta_saft_summary <- purrr::map2_dfr(
+    results_by_config,
+    names(results_by_config),
+    ~ mutate(.x$beta_saft_summary, config = .y)
+  )
+  
+  all_beta_saft_summary <- all_beta_saft_summary %>%
+    left_join(config_info, by = "config")
+  
+  # produce a publication-ready table of sAFT beta_surv estimates by scenario
+  aft_tab <- all_beta_saft_summary %>%
+    mutate(
+      Basis    = bf,
+      k        = as.integer(k_bases),
+      n        = as.integer(n),
+      Cens     = as.integer(cens),
+      Dist     = dist,
+      Scenario = as.integer(scenario),
+      Method   = method
+    ) %>%
+    transmute(
+      Parameter = parameter,
+      Basis,
+      k,
+      n,
+      Cens,
+      Dist,
+      Scenario,
+      Method,
+      Truth = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario],
+      Mean,
+      Bias,
+      SD,
+      RMSE,
+      n_sims
+    ) %>%
+    arrange(Parameter, Basis, k, n, Cens, Dist, Scenario, Method)
+  
+  aft_ft <- aft_tab %>%
+    # filter(!grepl("^nsx\\(", Parameter)) %>%  # remove spline basis terms
+    mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+    flextable::flextable() %>%
+    flextable::autofit()
+  
+  print(aft_ft)
+}
+
 ##########
 
 
@@ -604,82 +835,173 @@ if (nrow(all_filtered_data) > 0) {
   # Total: 7 scenarios × 2 censoring levels × 2 basis types × 3 k values = 84 configurations
   desired_order <- c(
     # 0% Censoring, Scenarios 1-7
-    "BP k=5, c=0%, S1",  "GB k=5, c=0%, S1",
-    "BP k=7, c=0%, S1",  "GB k=7, c=0%, S1",
-    "BP k=9, c=0%, S1",  "GB k=9, c=0%, S1",
+    "BP k=3, c=0%, S1",  "GB k=3, c=0%, S1", "aft_only_BP_noRP k=3, c=0%, S1",
+    "BP k=4, c=0%, S1",  "GB k=4, c=0%, S1", "aft_only_BP_noRP k=4, c=0%, S1",
+    "BP k=5, c=0%, S1",  "GB k=5, c=0%, S1", "aft_only_BP_noRP k=5, c=0%, S1",
+    "BP k=6, c=0%, S1",  "GB k=6, c=0%, S1", "aft_only_BP_noRP k=6, c=0%, S1",
+    "BP k=7, c=0%, S1",  "GB k=7, c=0%, S1", "aft_only_BP_noRP k=7, c=0%, S1",
+    "BP k=8, c=0%, S1",  "GB k=8, c=0%, S1", "aft_only_BP_noRP k=8, c=0%, S1",
+    "BP k=9, c=0%, S1",  "GB k=9, c=0%, S1", "aft_only_BP_noRP k=9, c=0%, S1", 
+    "BP k=10, c=0%, S1",  "GB k=10, c=0%, S1", "aft_only_BP_noRP k=10, c=0%, S1", 
     
-    "BP k=5, c=0%, S2",  "GB k=5, c=0%, S2",
-    "BP k=7, c=0%, S2",  "GB k=7, c=0%, S2",
-    "BP k=9, c=0%, S2",  "GB k=9, c=0%, S2",
+    "BP k=3, c=0%, S2",  "GB k=3, c=0%, S2", "aft_only_BP_noRP k=3, c=0%, S2",
+    "BP k=4, c=0%, S2",  "GB k=4, c=0%, S2", "aft_only_BP_noRP k=4, c=0%, S2",
+    "BP k=5, c=0%, S2",  "GB k=5, c=0%, S2", "aft_only_BP_noRP k=5, c=0%, S2",
+    "BP k=6, c=0%, S2",  "GB k=6, c=0%, S2", "aft_only_BP_noRP k=6, c=0%, S2", 
+    "BP k=7, c=0%, S2",  "GB k=7, c=0%, S2", "aft_only_BP_noRP k=7, c=0%, S2",
+    "BP k=8, c=0%, S2",  "GB k=8, c=0%, S2", "aft_only_BP_noRP k=8, c=0%, S2",
+    "BP k=9, c=0%, S2",  "GB k=9, c=0%, S2", "aft_only_BP_noRP k=9, c=0%, S2", 
+    "BP k=10, c=0%, S2",  "GB k=10, c=0%, S2", "aft_only_BP_noRP k=10, c=0%, S2",
     
-    "BP k=5, c=0%, S3",  "GB k=5, c=0%, S3",
-    "BP k=7, c=0%, S3",  "GB k=7, c=0%, S3",
-    "BP k=9, c=0%, S3",  "GB k=9, c=0%, S3",
+    "BP k=3, c=0%, S3",  "GB k=3, c=0%, S3", "aft_only_BP_noRP k=3, c=0%, S3",
+    "BP k=4, c=0%, S3",  "GB k=4, c=0%, S3", "aft_only_BP_noRP k=4, c=0%, S3",
+    "BP k=5, c=0%, S3",  "GB k=5, c=0%, S3", "aft_only_BP_noRP k=5, c=0%, S3",
+    "BP k=6, c=0%, S3",  "GB k=6, c=0%, S3", "aft_only_BP_noRP k=6, c=0%, S3",
+    "BP k=7, c=0%, S3",  "GB k=7, c=0%, S3", "aft_only_BP_noRP k=7, c=0%, S3",
+    "BP k=8, c=0%, S3",  "GB k=8, c=0%, S3", "aft_only_BP_noRP k=8, c=0%, S3",
+    "BP k=9, c=0%, S3",  "GB k=9, c=0%, S3", "aft_only_BP_noRP k=9, c=0%, S3",
+    "BP k=10, c=0%, S3",  "GB k=10, c=0%, S3", "aft_only_BP_noRP k=10, c=0%, S3",
     
-    "BP k=5, c=0%, S4",  "GB k=5, c=0%, S4",
-    "BP k=7, c=0%, S4",  "GB k=7, c=0%, S4",
-    "BP k=9, c=0%, S4",  "GB k=9, c=0%, S4",
+    "BP k=3, c=0%, S4",  "GB k=3, c=0%, S4", "aft_only_BP_noRP k=3, c=0%, S4",
+    "BP k=4, c=0%, S4",  "GB k=4, c=0%, S4", "aft_only_BP_noRP k=4, c=0%, S4",
+    "BP k=5, c=0%, S4",  "GB k=5, c=0%, S4", "aft_only_BP_noRP k=5, c=0%, S4",
+    "BP k=6, c=0%, S4",  "GB k=6, c=0%, S4", "aft_only_BP_noRP k=6, c=0%, S4",
+    "BP k=7, c=0%, S4",  "GB k=7, c=0%, S4", "aft_only_BP_noRP k=7, c=0%, S4",
+    "BP k=8, c=0%, S4",  "GB k=8, c=0%, S4", "aft_only_BP_noRP k=8, c=0%, S4",
+    "BP k=9, c=0%, S4",  "GB k=9, c=0%, S4", "aft_only_BP_noRP k=9, c=0%, S4",
+    "BP k=10, c=0%, S4",  "GB k=10, c=0%, S4", "aft_only_BP_noRP k=10, c=0%, S4",
     
-    "BP k=5, c=0%, S5",  "GB k=5, c=0%, S5",
-    "BP k=7, c=0%, S5",  "GB k=7, c=0%, S5",
-    "BP k=9, c=0%, S5",  "GB k=9, c=0%, S5",
+    "BP k=3, c=0%, S5",  "GB k=3, c=0%, S5", "aft_only_BP_noRP k=3, c=0%, S5",
+    "BP k=4, c=0%, S5",  "GB k=4, c=0%, S5", "aft_only_BP_noRP k=4, c=0%, S5",
+    "BP k=5, c=0%, S5",  "GB k=5, c=0%, S5", "aft_only_BP_noRP k=5, c=0%, S5",
+    "BP k=6, c=0%, S5",  "GB k=6, c=0%, S5", "aft_only_BP_noRP k=6, c=0%, S5",
+    "BP k=7, c=0%, S5",  "GB k=7, c=0%, S5", "aft_only_BP_noRP k=7, c=0%, S5",
+    "BP k=8, c=0%, S5",  "GB k=8, c=0%, S5", "aft_only_BP_noRP k=8, c=0%, S5",
+    "BP k=9, c=0%, S5",  "GB k=9, c=0%, S5", "aft_only_BP_noRP k=9, c=0%, S5",
+    "BP k=10, c=0%, S5",  "GB k=10, c=0%, S5", "aft_only_BP_noRP k=10, c=0%, S5",
     
-    "BP k=5, c=0%, S6",  "GB k=5, c=0%, S6",
-    "BP k=7, c=0%, S6",  "GB k=7, c=0%, S6",
-    "BP k=9, c=0%, S6",  "GB k=9, c=0%, S6",
+    "BP k=3, c=0%, S6",  "GB k=3, c=0%, S6", "aft_only_BP_noRP k=3, c=0%, S6",
+    "BP k=4, c=0%, S6",  "GB k=4, c=0%, S6", "aft_only_BP_noRP k=4, c=0%, S6",
+    "BP k=5, c=0%, S6",  "GB k=5, c=0%, S6", "aft_only_BP_noRP k=5, c=0%, S6",
+    "BP k=6, c=0%, S6",  "GB k=6, c=0%, S6", "aft_only_BP_noRP k=6, c=0%, S6",
+    "BP k=7, c=0%, S6",  "GB k=7, c=0%, S6", "aft_only_BP_noRP k=7, c=0%, S6",
+    "BP k=8, c=0%, S6",  "GB k=8, c=0%, S6", "aft_only_BP_noRP k=8, c=0%, S6",
+    "BP k=9, c=0%, S6",  "GB k=9, c=0%, S6", "aft_only_BP_noRP k=9, c=0%, S6",
+    "BP k=10, c=0%, S6",  "GB k=10, c=0%, S6", "aft_only_BP_noRP k=10, c=0%, S6",
     
-    "BP k=5, c=0%, S7",  "GB k=5, c=0%, S7",
-    "BP k=7, c=0%, S7",  "GB k=7, c=0%, S7",
-    "BP k=9, c=0%, S7",  "GB k=9, c=0%, S7",
+    "BP k=3, c=0%, S7",  "GB k=3, c=0%, S7", "aft_only_BP_noRP k=3, c=0%, S7",
+    "BP k=4, c=0%, S7",  "GB k=4, c=0%, S7", "aft_only_BP_noRP k=4, c=0%, S7",
+    "BP k=5, c=0%, S7",  "GB k=5, c=0%, S7", "aft_only_BP_noRP k=5, c=0%, S7",
+    "BP k=6, c=0%, S7",  "GB k=6, c=0%, S7", "aft_only_BP_noRP k=6, c=0%, S7",
+    "BP k=7, c=0%, S7",  "GB k=7, c=0%, S7", "aft_only_BP_noRP k=7, c=0%, S7",
+    "BP k=8, c=0%, S7",  "GB k=8, c=0%, S7", "aft_only_BP_noRP k=8, c=0%, S7",
+    "BP k=9, c=0%, S7",  "GB k=9, c=0%, S7", "aft_only_BP_noRP k=9, c=0%, S7",
+    "BP k=10, c=0%, S7",  "GB k=10, c=0%, S7", "aft_only_BP_noRP k=10, c=0%, S7",
     
     # 50% Censoring, Scenarios 1-7
-    "BP k=5, c=50%, S1",  "GB k=5, c=50%, S1",
-    "BP k=7, c=50%, S1",  "GB k=7, c=50%, S1",
-    "BP k=9, c=50%, S1",  "GB k=9, c=50%, S1",
+    "BP k=3, c=50%, S1",  "GB k=3, c=50%, S1", "aft_only_BP_noRP k=3, c=50%, S1",
+    "BP k=4, c=50%, S1",  "GB k=4, c=50%, S1", "aft_only_BP_noRP k=4, c=50%, S1",
+    "BP k=5, c=50%, S1",  "GB k=5, c=50%, S1", "aft_only_BP_noRP k=5, c=50%, S1",
+    "BP k=6, c=50%, S1",  "GB k=6, c=50%, S1", "aft_only_BP_noRP k=6, c=50%, S1",
+    "BP k=7, c=50%, S1",  "GB k=7, c=50%, S1", "aft_only_BP_noRP k=7, c=50%, S1",
+    "BP k=8, c=50%, S1",  "GB k=8, c=50%, S1", "aft_only_BP_noRP k=8, c=50%, S1",
+    "BP k=9, c=50%, S1",  "GB k=9, c=50%, S1", "aft_only_BP_noRP k=9, c=50%, S1",
+    "BP k=10, c=50%, S1",  "GB k=10, c=50%, S1", "aft_only_BP_noRP k=10, c=50%, S1",
     
-    "BP k=5, c=50%, S2",  "GB k=5, c=50%, S2",
-    "BP k=7, c=50%, S2",  "GB k=7, c=50%, S2",
-    "BP k=9, c=50%, S2",  "GB k=9, c=50%, S2",
+    "BP k=3, c=50%, S2",  "GB k=3, c=50%, S2", "aft_only_BP_noRP k=3, c=50%, S2",
+    "BP k=4, c=50%, S2",  "GB k=4, c=50%, S2", "aft_only_BP_noRP k=4, c=50%, S2",
+    "BP k=5, c=50%, S2",  "GB k=5, c=50%, S2", "aft_only_BP_noRP k=5, c=50%, S2",
+    "BP k=6, c=50%, S2",  "GB k=6, c=50%, S2", "aft_only_BP_noRP k=6, c=50%, S2",
+    "BP k=7, c=50%, S2",  "GB k=7, c=50%, S2", "aft_only_BP_noRP k=7, c=50%, S2",
+    "BP k=8, c=50%, S2",  "GB k=8, c=50%, S2", "aft_only_BP_noRP k=8, c=50%, S2",
+    "BP k=9, c=50%, S2",  "GB k=9, c=50%, S2", "aft_only_BP_noRP k=9, c=50%, S2",
+    "BP k=10, c=50%, S2",  "GB k=10, c=50%, S2", "aft_only_BP_noRP k=10, c=50%, S2",
     
-    "BP k=5, c=50%, S3",  "GB k=5, c=50%, S3",
-    "BP k=7, c=50%, S3",  "GB k=7, c=50%, S3",
-    "BP k=9, c=50%, S3",  "GB k=9, c=50%, S3",
+    "BP k=3, c=50%, S3",  "GB k=3, c=50%, S3", "aft_only_BP_noRP k=3, c=50%, S3",
+    "BP k=4, c=50%, S3",  "GB k=4, c=50%, S3", "aft_only_BP_noRP k=4, c=50%, S3",
+    "BP k=5, c=50%, S3",  "GB k=5, c=50%, S3", "aft_only_BP_noRP k=5, c=50%, S3",
+    "BP k=6, c=50%, S3",  "GB k=6, c=50%, S3", "aft_only_BP_noRP k=6, c=50%, S3",
+    "BP k=7, c=50%, S3",  "GB k=7, c=50%, S3", "aft_only_BP_noRP k=7, c=50%, S3",
+    "BP k=8, c=50%, S3",  "GB k=8, c=50%, S3", "aft_only_BP_noRP k=8, c=50%, S3",
+    "BP k=9, c=50%, S3",  "GB k=9, c=50%, S3", "aft_only_BP_noRP k=9, c=50%, S3",
+    "BP k=10, c=50%, S3",  "GB k=10, c=50%, S3", "aft_only_BP_noRP k=10, c=50%, S3",
     
-    "BP k=5, c=50%, S4",  "GB k=5, c=50%, S4",
-    "BP k=7, c=50%, S4",  "GB k=7, c=50%, S4",
-    "BP k=9, c=50%, S4",  "GB k=9, c=50%, S4",
+    "BP k=3, c=50%, S4",  "GB k=3, c=50%, S4", "aft_only_BP_noRP k=3, c=50%, S4",
+    "BP k=4, c=50%, S4",  "GB k=4, c=50%, S4", "aft_only_BP_noRP k=4, c=50%, S4",
+    "BP k=5, c=50%, S4",  "GB k=5, c=50%, S4", "aft_only_BP_noRP k=5, c=50%, S4",
+    "BP k=6, c=50%, S4",  "GB k=6, c=50%, S4", "aft_only_BP_noRP k=6, c=50%, S4",
+    "BP k=7, c=50%, S4",  "GB k=7, c=50%, S4", "aft_only_BP_noRP k=7, c=50%, S4",
+    "BP k=8, c=50%, S4",  "GB k=8, c=50%, S4", "aft_only_BP_noRP k=8, c=50%, S4",
+    "BP k=9, c=50%, S4",  "GB k=9, c=50%, S4", "aft_only_BP_noRP k=9, c=50%, S4",
+    "BP k=10, c=50%, S4",  "GB k=10, c=50%, S4", "aft_only_BP_noRP k=10, c=50%, S4",
     
-    "BP k=5, c=50%, S5",  "GB k=5, c=50%, S5",
-    "BP k=7, c=50%, S5",  "GB k=7, c=50%, S5",
-    "BP k=9, c=50%, S5",  "GB k=9, c=50%, S5",
+    "BP k=3, c=50%, S5",  "GB k=3, c=50%, S5", "aft_only_BP_noRP k=3, c=50%, S5",
+    "BP k=4, c=50%, S5",  "GB k=4, c=50%, S5", "aft_only_BP_noRP k=4, c=50%, S5",
+    "BP k=5, c=50%, S5",  "GB k=5, c=50%, S5", "aft_only_BP_noRP k=5, c=50%, S5",
+    "BP k=6, c=50%, S5",  "GB k=6, c=50%, S5", "aft_only_BP_noRP k=6, c=50%, S5",
+    "BP k=7, c=50%, S5",  "GB k=7, c=50%, S5", "aft_only_BP_noRP k=7, c=50%, S5",
+    "BP k=8, c=50%, S5",  "GB k=8, c=50%, S5", "aft_only_BP_noRP k=8, c=50%, S5",
+    "BP k=9, c=50%, S5",  "GB k=9, c=50%, S5", "aft_only_BP_noRP k=9, c=50%, S5",
+    "BP k=10, c=50%, S5",  "GB k=10, c=50%, S5", "aft_only_BP_noRP k=10, c=50%, S5",
     
-    "BP k=5, c=50%, S6",  "GB k=5, c=50%, S6",
-    "BP k=7, c=50%, S6",  "GB k=7, c=50%, S6",
-    "BP k=9, c=50%, S6",  "GB k=9, c=50%, S6",
+    "BP k=3, c=50%, S6",  "GB k=3, c=50%, S6", "aft_only_BP_noRP k=3, c=50%, S6",
+    "BP k=4, c=50%, S6",  "GB k=4, c=50%, S6", "aft_only_BP_noRP k=4, c=50%, S6",
+    "BP k=5, c=50%, S6",  "GB k=5, c=50%, S6", "aft_only_BP_noRP k=5, c=50%, S6",
+    "BP k=6, c=50%, S6",  "GB k=6, c=50%, S6", "aft_only_BP_noRP k=6, c=50%, S6",
+    "BP k=7, c=50%, S6",  "GB k=7, c=50%, S6", "aft_only_BP_noRP k=7, c=50%, S6",
+    "BP k=8, c=50%, S6",  "GB k=8, c=50%, S6", "aft_only_BP_noRP k=8, c=50%, S6",
+    "BP k=9, c=50%, S6",  "GB k=9, c=50%, S6", "aft_only_BP_noRP k=9, c=50%, S6",
+    "BP k=10, c=50%, S6",  "GB k=10, c=50%, S6", "aft_only_BP_noRP k=10, c=50%, S6",
     
-    "BP k=5, c=50%, S7",  "GB k=5, c=50%, S7",
-    "BP k=7, c=50%, S7",  "GB k=7, c=50%, S7",
-    "BP k=9, c=50%, S7",  "GB k=9, c=50%, S7"
+    "BP k=3, c=50%, S7",  "GB k=3, c=50%, S7", "aft_only_BP_noRP k=3, c=50%, S7",
+    "BP k=4, c=50%, S7",  "GB k=4, c=50%, S7", "aft_only_BP_noRP k=4, c=50%, S7",
+    "BP k=5, c=50%, S7",  "GB k=5, c=50%, S7", "aft_only_BP_noRP k=5, c=50%, S7",
+    "BP k=6, c=50%, S7",  "GB k=6, c=50%, S7", "aft_only_BP_noRP k=6, c=50%, S7",
+    "BP k=7, c=50%, S7",  "GB k=7, c=50%, S7", "aft_only_BP_noRP k=7, c=50%, S7",
+    "BP k=8, c=50%, S7",  "GB k=8, c=50%, S7", "aft_only_BP_noRP k=8, c=50%, S7",
+    "BP k=9, c=50%, S7",  "GB k=9, c=50%, S7", "aft_only_BP_noRP k=9, c=50%, S7",
+    "BP k=10, c=50%, S7",  "GB k=10, c=50%, S7", "aft_only_BP_noRP k=10, c=50%, S7"
   )
   
   all_filtered_data$config <- factor(all_filtered_data$config, levels = desired_order)
   
   # Reference lines for key parameters
   # Note: beta_long[3] and beta_surv[1] will be added dynamically per scenario in plots
-  reference_lines_plot <- tibble::tibble(
-    variable = c("beta_long[1]","beta_long[2]",
-                 "sd_1_long[1]","sd_1_long[2]","sigma_long",
-                 "alpha"),
-    reference = c(73, -0.04, 15, 0.20, 12, 0.015)
-  )
+  if (models_to_plot == "aft_only_BP_noRP") {
+    reference_lines_plot <- tibble::tibble(
+      variable = c("beta_long[1]","beta_long[2]",
+                   "sd_1_long[1]","sd_1_long[2]","sigma_long",
+                   "alpha"),
+      reference = c(0, 0, 0, 0, 0, 0)
+    )
+  } else {
+    reference_lines_plot <- tibble::tibble(
+      variable = c("beta_long[1]","beta_long[2]",
+                   "sd_1_long[1]","sd_1_long[2]","sigma_long",
+                   "alpha"),
+      # reference = c(73, -0.04, 15, 0.20, 12, 0.012)
+      reference = c(73, -0.04, 15, 0.20, 12, 0) # try no association 20260113
+    )
+  }
   
   # Scenario-specific reference values for faceting
-  scenario_refs <- tibble::tibble(
-    variable = rep(c("beta_long[3]", "beta_surv[1]"), each = 7),
-    scenario = rep(1:7, 2),
-    reference = c(0.00, 0.04, -0.04, 0.08, -0.08, 0.12, -0.12,  # beta_long[3] for scenarios 1-7
-                  0.00, 0.90, -0.90, 1.80, -1.80, 2.70, -2.70)   # beta_surv[1] for scenarios 1-7
-  )
+  if (models_to_plot == "aft_only_BP_noRP") {
+    scenario_refs <- tibble::tibble(
+      variable = rep(c("beta_long[3]", "beta_surv[1]"), each = 7),
+      scenario = rep(1:7, 2),
+      reference = c(0, 0, 0, 0, 0,0, 0,  # beta_long[3] for scenarios 1-7
+                    0.00, 0.90, 0.90, -0.90, -0.90, 2.70, -2.70)   # beta_surv[1] for scenarios 1-7
+    )
+  } else {
+    scenario_refs <- tibble::tibble(
+      variable = rep(c("beta_long[3]", "beta_surv[1]"), each = 7),
+      scenario = rep(1:7, 2),
+      # reference = c(0.00, 0.04, -0.04, 0.08, -0.08, 0.12, -0.12,  # beta_long[3] for scenarios 1-7
+      #               0.00, 0.90, -0.90, 1.80, -1.80, 2.70, -2.70)   # beta_surv[1] for scenarios 1-7
+      reference = c(0.00, 0.04, -0.04, 0.04, -0.04, 0.12, -0.12,  # beta_long[3] for scenarios 1-7
+                    0.00, 0.90, 0.90, -0.90, -0.90, 2.70, -2.70)   # beta_surv[1] for scenarios 1-7
+    )
+  }
   
   # Shared palette - for BP/GB combinations
   # Generate 84 distinct colors (7 scenarios × 2 censoring × 2 basis × 3 k values)
@@ -701,11 +1023,11 @@ if (nrow(all_filtered_data) > 0) {
   var_order <- reference_lines$variable
   
   
-  ### Loglogistic distribution figures (ENZAMET only uses loglogistic)
+  #### Loglogistic distribution figures (ENZAMET only uses loglogistic) ####
   
   message("Generating loglogistic figures for ENZAMET scenarios...")
   message("Total rows in all_filtered_data: ", nrow(all_filtered_data))
-  message("Unique configs: ", paste(unique(all_filtered_data$config), collapse = ", "))
+  message("Unique configs:\n", paste(unique(all_filtered_data$config), collapse = "\n"))
   
   fig_1L <- all_filtered_data %>%
     dplyr::filter(!grepl("gamma\\[", variable), !grepl("f_gp\\[", variable), !grepl("^gp_", variable)) %>%
@@ -736,7 +1058,8 @@ if (nrow(all_filtered_data) > 0) {
     ggplot2::labs(
       x = "Configuration",
       y = "Posterior Mean",
-      title = "Posterior Means - ENZAMET (Loglogistic Hazard, 7 Scenarios, 0%/50% Censoring)"
+      # title = "Posterior Means - ENZAMET (Loglogistic Hazard, 7 Scenarios, 0%/50% Censoring)"
+      title = "Posterior Means - ENZAMET (5 Scenarios, 0%/50% Censoring)"
     )
   
   print(fig_1L)
@@ -762,16 +1085,14 @@ if (nrow(all_filtered_data) > 0) {
   ggplot2::ggsave(filename = file.path(fig_dir, "fig_ENZAMET_loglogistic.pdf"),
                   plot = fig_1L, width = 18, height = 10, units = "in")
   
-  message("✓ Saved ENZAMET figure to: ", fig_dir)
-  message("  - fig_ENZAMET_loglogistic.pdf")
-  
+  message("✓ Saved ENZAMET figure to: ", fig_dir, "\n  - fig_ENZAMET_loglogistic.pdf")
 } else {
   message("No data available for figure generation")
 }
 
 ##########
 
-# Baseline hazard plots
+#### Baseline hazard plots ####
 ##########
 # 
 # Plot baseline hazards for the first 5 simulations using the basis weights
@@ -779,8 +1100,10 @@ if (nrow(all_filtered_data) > 0) {
 # the underlying hazard function.
 #
 
+n_bases = config_info$k_bases[1]  # Assuming all selected models have the same k_bases, otherwise loop through each config
+t_max = as.numeric(gsub("[^0-9]", "", config_info$fu))[1] # Extract numeric part of follow-up time, e.g., 72 from "FU72"
 # Function to create Gaussian basis functions
-create_gaussian_basis <- function(t, n_bases = 5, t_max = 72) {
+create_gaussian_basis <- function(t, n_bases = n_bases, t_max = t_max) {
   # Create evenly spaced centers across time range
   centers <- seq(0, t_max, length.out = n_bases)
   bandwidth <- (t_max / n_bases) * 0.5  # Overlap between bases
@@ -795,7 +1118,7 @@ create_gaussian_basis <- function(t, n_bases = 5, t_max = 72) {
 }
 
 # Function to create Bernstein polynomial basis (b_(k,m))
-create_bernstein_basis <- function(t, n_bases = 5, t_max = 72) {
+create_bernstein_basis <- function(t, n_bases = n_bases, t_max = t_max) {
   # Normalize time to [0, 1]
   t_norm <- t / t_max
   t_norm <- pmin(pmax(t_norm, 0), 1)  # Clamp to [0, 1]
@@ -812,7 +1135,7 @@ create_bernstein_basis <- function(t, n_bases = 5, t_max = 72) {
 }
 
 # Function to extract gamma weights from simulation
-extract_gamma_weights <- function(sim_data, n_bases = 5) {
+extract_gamma_weights <- function(sim_data, n_bases = n_bases) {
   gamma_vars <- paste0("gamma[", 1:n_bases, "]")
   gamma_df <- sim_data %>%
     dplyr::filter(variable %in% gamma_vars) %>%
@@ -827,7 +1150,7 @@ extract_gamma_weights <- function(sim_data, n_bases = 5) {
 
 # Select configurations to plot - dynamically discover from available files
 # Get all unique configs from output directory
-all_rds_files <- list.files(out_dir, pattern = "\\.rds$", full.names = FALSE)
+all_rds_files <- list.files(out_dir, pattern = "\\.[rR][dD][sS]$", full.names = FALSE)
 all_configs <- substr(tools::file_path_sans_ext(all_rds_files),
                       1, nchar(tools::file_path_sans_ext(all_rds_files)) - 9) %>%
   unique()
@@ -839,9 +1162,8 @@ models_pattern <- paste0("^(", paste(models_to_plot, collapse = "|"), ")_k[579]_
 configs_to_plot <- all_configs[grepl(models_pattern, all_configs)]
 
 if (length(configs_to_plot) == 0) {
-  message("No matching configs found for baseline hazard plots. Available configs:")
-  message(paste(head(all_configs, 10), collapse = "\n"))
-  message("\nLooking for models: ", paste(models_to_plot, collapse = ", "))
+  message("No matching configs found for baseline hazard plots.\n\nAvailable configs:\n", paste(head(all_configs, 10), collapse = "\n"))
+  message("Looking for models:\n", paste(models_to_plot, collapse = "\n"))
 }
 
 # Constructing fixed basis knots for Gaussian Bases
@@ -950,7 +1272,7 @@ for (config in configs_to_plot) {
   message("  Plotting ", n_sims_to_plot, " simulations")
   
   # Time grid for plotting (ENZAMET uses FU=72 months)
-  t_grid <- seq(0, 72, length.out = 200)
+  t_grid <- seq(0, t_max, length.out = 200)
   
   # Create basis matrix based on model type
   if (model_type == "GB" || model_type == "GB_Quantile") {
@@ -962,6 +1284,10 @@ for (config in configs_to_plot) {
     u_grid      <- t_grid / max(t_grid)
     basis_matrix <- create_bernstein_basis(u_grid, m = k_bases)
     basis_name   <- "Bernstein Polynomial"
+  }else if (model_type == "aft_only_BP_noRP") {
+    u_grid      <- t_grid / max(t_grid)
+    basis_matrix <- create_bernstein_basis(u_grid, m = k_bases)
+    basis_name   <- "BP no roughness penalty"
   } else if (model_type == "GP") {
     u_grid      <- seq(0, 1, length.out = k_bases)
     basis_matrix <- NULL
@@ -1058,8 +1384,8 @@ for (config in configs_to_plot) {
   all_hazard_data <- rbind(hazard_data, true_hazard_data)
   
   # Get covariate effects from true parameter values for AFT model
-  beta_surv_1 <- 0.25
-  X_ref <- 1  # Reference covariate value
+  beta_surv_1 <- 0.25 # ?
+  X_ref <- 1  # Reference covariate value # ?
   time_acceleration <- exp(-beta_surv_1 * X_ref)  # AFT time scaling
   
   # Compute cumulative hazards via trapezoidal integration
@@ -1118,7 +1444,7 @@ for (config in configs_to_plot) {
       ggplot2::labs(
         title = paste0("Cumulative Baseline Hazard: ENZAMET Scenario ", scenario, " (", basis_name, ", k=", k_bases, ")"),
         subtitle = paste0("n=", config_parsed$n, ", ", config_parsed$cens, "% censoring, ", 
-                          "loglogistic hazard, FU=72 months. ",
+                          # "loglogistic hazard, FU=72 months. ",
                           "Black solid = True, Colored dashed = Estimated"),
         x = "Time (months)",
         y = "Cumulative Baseline Hazard H_0(t)"
@@ -1212,39 +1538,85 @@ param_labels <- c(
 )
 
 # True values (scenarios 1–5) using exactly what you supplied
-truth_15 <- tibble::tribble(
-  ~scenario, ~variable,        ~truth,
-  1,         "beta_long[1]",   73,
-  2,         "beta_long[1]",   73,
-  3,         "beta_long[1]",   73,
-  4,         "beta_long[1]",   73,
-  5,         "beta_long[1]",   73,
-  
-  1,         "beta_long[2]",   -0.04,
-  2,         "beta_long[2]",   -0.04,
-  3,         "beta_long[2]",   -0.04,
-  4,         "beta_long[2]",   -0.04,
-  5,         "beta_long[2]",   -0.04,
-  
-  1,         "beta_long[3]",   0.00,
-  2,         "beta_long[3]",   0.04,
-  3,         "beta_long[3]",   -0.04,
-  4,         "beta_long[3]",   0.04,
-  5,         "beta_long[3]",   -0.04,
-  
-  1,         "alpha",          0.012,
-  2,         "alpha",          0.012,
-  3,         "alpha",          0.012,
-  4,         "alpha",          0.012,
-  5,         "alpha",          0.012,
-  
-  # you used gamma_1 as the survival covariate effect
-  1,         "beta_surv[1]",   0.00,
-  2,         "beta_surv[1]",   0.90,
-  3,         "beta_surv[1]",   0.90,
-  4,         "beta_surv[1]",   -0.90,
-  5,         "beta_surv[1]",   -0.90
-)
+if (models_to_plot == "aft_only_BP_noRP") {
+  truth_15 <- tibble::tribble(
+    ~scenario, ~variable,        ~truth,
+    1,         "beta_long[1]",   0,
+    2,         "beta_long[1]",   0,
+    3,         "beta_long[1]",   0,
+    4,         "beta_long[1]",   0,
+    5,         "beta_long[1]",   0,
+    
+    1,         "beta_long[2]",   0,
+    2,         "beta_long[2]",   0,
+    3,         "beta_long[2]",   0,
+    4,         "beta_long[2]",   0,
+    5,         "beta_long[2]",   0,
+    
+    1,         "beta_long[3]",   0.00,
+    2,         "beta_long[3]",   0.04,
+    3,         "beta_long[3]",   -0.04,
+    4,         "beta_long[3]",   0.04,
+    5,         "beta_long[3]",   -0.04,
+    
+    # 1,         "alpha",          0.012,
+    # 2,         "alpha",          0.012,
+    # 3,         "alpha",          0.012,
+    # 4,         "alpha",          0.012,
+    # 5,         "alpha",          0.012,
+    1,         "alpha",          0.000, # try no association 20260113
+    2,         "alpha",          0.000, # try no association 20260113
+    3,         "alpha",          0.000, # try no association 20260113
+    4,         "alpha",          0.000, # try no association 20260113
+    5,         "alpha",          0.000, # try no association 20260113
+    
+    # you used gamma_1 as the survival covariate effect
+    1,         "beta_surv[1]",   0.00,
+    2,         "beta_surv[1]",   0.90,
+    3,         "beta_surv[1]",   0.90,
+    4,         "beta_surv[1]",   -0.90,
+    5,         "beta_surv[1]",   -0.90
+  )
+} else {
+  truth_15 <- tibble::tribble(
+    ~scenario, ~variable,        ~truth,
+    1,         "beta_long[1]",   73,
+    2,         "beta_long[1]",   73,
+    3,         "beta_long[1]",   73,
+    4,         "beta_long[1]",   73,
+    5,         "beta_long[1]",   73,
+    
+    1,         "beta_long[2]",   -0.04,
+    2,         "beta_long[2]",   -0.04,
+    3,         "beta_long[2]",   -0.04,
+    4,         "beta_long[2]",   -0.04,
+    5,         "beta_long[2]",   -0.04,
+    
+    1,         "beta_long[3]",   0.00,
+    2,         "beta_long[3]",   0.04,
+    3,         "beta_long[3]",   -0.04,
+    4,         "beta_long[3]",   0.04,
+    5,         "beta_long[3]",   -0.04,
+    
+    # 1,         "alpha",          0.012,
+    # 2,         "alpha",          0.012,
+    # 3,         "alpha",          0.012,
+    # 4,         "alpha",          0.012,
+    # 5,         "alpha",          0.012,
+    1,         "alpha",          0.000, # try no association 20260113
+    2,         "alpha",          0.000, # try no association 20260113
+    3,         "alpha",          0.000, # try no association 20260113
+    4,         "alpha",          0.000, # try no association 20260113
+    5,         "alpha",          0.000, # try no association 20260113
+    
+    # you used gamma_1 as the survival covariate effect
+    1,         "beta_surv[1]",   0.00,
+    2,         "beta_surv[1]",   0.90,
+    3,         "beta_surv[1]",   0.90,
+    4,         "beta_surv[1]",   -0.90,
+    5,         "beta_surv[1]",   -0.90
+  )
+}
 
 # ------------------------------------------------------------
 # Parse metadata from SHORT config label: "BP k=5, c=0%, S1"
@@ -1270,11 +1642,11 @@ config_info <- tibble(config = unique(all_filtered_data$config)) %>%
 # Build per-simulation performance table (creates distributions)
 # ------------------------------------------------------------
 perf_sim <- all_filtered_data %>%
-  filter(variable %in% key_vars) %>%
+  dplyr::filter(variable %in% key_vars) %>%
   left_join(config_info, by = "config") %>%
-  filter(!is.na(scenario), scenario %in% 1:5) %>%
+  dplyr::filter(!is.na(scenario), scenario %in% 1:5) %>%
   left_join(truth_15, by = c("scenario", "variable")) %>%
-  filter(!is.na(truth)) %>%
+  dplyr::filter(!is.na(truth)) %>%
   mutate(
     err      = mean - truth,
     bias     = err,
@@ -1302,7 +1674,7 @@ if (nrow(perf_sim) == 0) {
 
 # Optional diagnostic: check beta_0 (intercept) centering
 beta0_check <- perf_sim %>%
-  filter(as.character(Parameter) == "beta[0]") %>%
+  dplyr::filter(as.character(Parameter) == "beta[0]") %>%
   group_by(Cens, Scenario, k) %>%
   summarise(
     mean_of_means   = mean(mean),
@@ -1368,9 +1740,9 @@ cov_sum <- perf_sim %>%
   summarise(
     coverage = mean(covered),
     n = n(),
-    se = sqrt(coverage * (1 - coverage) / n),
-    lo = pmax(0, coverage - 1.96 * se),
-    hi = pmin(1, coverage + 1.96 * se),
+    se = sqrt(coverage * (1 - coverage) / n), # ?
+    lo = pmax(0, coverage - 1.96 * se), # ?
+    hi = pmin(1, coverage + 1.96 * se), # ?
     .groups = "drop"
   )
 

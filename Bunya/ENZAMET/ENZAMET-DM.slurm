@@ -8,7 +8,7 @@
 #SBATCH --array=1-100
 #SBATCH --mem=20GB
 ## change to 40GB for larger simulation
-#SBATCH --time=3:00:00
+#SBATCH --time=1:00:00
 ## change to 8 for larger simulation
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr

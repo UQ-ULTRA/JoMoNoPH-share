@@ -27,7 +27,7 @@
 #                    (b) simulate joint data
 #                    (c) fit LME on longitudinal outcome (unless AFT-only model)
 #                    (d) fit simple AFT model (survreg) as a staging model / prior anchor
-#                    (e) fit chosen Stan model (BP/GB/GB_Quantile/GP/BP_alt/GB_aft/aft_only_BP_noRP)
+#                    (e) fit chosen Stan model (BP/GB/GB_Quantile/GP/BP_aft_alt/GB_aft/BP_aft)
 #                    (f) return summaries + diagnostics + runtime + LOO/WAIC
 # 4. SLURM job mapping: SLURM_ARRAY_TASK_ID → (config_id, batch_id) → trial_ids
 # 5. Results saved as one RDS per batch; script skips work if output already exists
@@ -37,9 +37,11 @@
 # - GB: Gaussian Basis baseline hazard (joint model)
 # - GB_Quantile: Gaussian Basis with quantile-based knots (joint model)
 # - GP: Gaussian Process baseline hazard (joint model)
-# - BP_alt: AFT model only using Bernstein Polynomials with ordered parameters
-# - GB_aft: AFT model only using Gaussian Basis
-# - aft_only_BP_noRP: AFT model only using Bernstein Polynomials (no joint modelling, no roughness penalty)
+# - BP_aft_alt: AFT model only, Bernstein Polynomials with ordered parameters, no roughness penalty
+# - GB_aft: AFT model only, Gaussian Basis, no roughness penalty
+# - GB_aft_logy: AFT model only, Gaussian Basis on log(y), no roughness penalty
+# - GB_aft_logy_adaptive: AFT model only, Gaussian Basis on log(y) with adaptive grid, no roughness penalty
+# - BP_aft: AFT model only, Bernstein Polynomials, no roughness penalty
 #
 # IMPORTANT DESIGN NOTES / ASSUMPTIONS:
 # - The survival “staging” model fit by survreg() uses dist = "exponential".
@@ -54,7 +56,7 @@
 # - Timeouts: each trial is capped by an elapsed wall-time limit (safe_elapsed).
 #
 # WHERE TO CHANGE THINGS (COMMON EDIT POINTS):
-# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP" / "BP_alt" / "GB_aft" / "aft_only_BP_noRP"
+# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP" / "BP_aft_alt" / "GB_aft" / "GB_aft_logy" / "GB_aft_logy_adaptive" / "BP_aft"
 # - Choose basis dimension: k_bases (often overridden by config_grid)
 # - Choose scenarios and censoring: config_base, lambda_map, cfg_default/cfg_zero
 # - Batch sizing: batch_size, sims_per_config
@@ -110,8 +112,8 @@ cpus_per_sim <- chains * threads_per_chain
 # Will be set from config_grid during execution
 k_bases <- 5  # Default, will be overridden
 
-# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_alt", "GB_aft", or "aft_only_BP_noRP"
-joint_model_type <- "aft_only_BP_noRP"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_alt", "GB_aft", or "aft_only_BP_noRP" as needed
+# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
+joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
 
 ##########
 
@@ -341,7 +343,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   # Track runtime for LME fit
   t_lme_start <- Sys.time()
   fit_long <- NULL
-  if (!joint_model_type %in% c("aft_only_BP_noRP", "BP_alt", "GB_aft")) {
+  if (!joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     fit_long <- nlme::lme(
       fixed = Y_obs ~ time + time_by_arm,
       random = ~ time | id,
@@ -404,7 +406,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     x = TRUE
   )
   
-  # Prepare data for joint model (BP, GB, GB_Quantile, GP, BP_alt, GB_aft, or aft_only_BP_noRP)
+  # Prepare data for joint model (BP, GB, GB_Quantile, GP, BP_aft_alt, GB_aft, GB_aft_logy, GB_aft_logy_adaptive, or BP_aft)
   if (joint_model_type == "BP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist.stan"
     # stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-DM.stan"  # 20260129
@@ -412,19 +414,23 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist.stan"
   } else if (joint_model_type == "GB_Quantile") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist-Quantile.stan"
-  } else if (joint_model_type == "BP_alt") {
+  } else if (joint_model_type == "BP_aft_alt") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-alt.stan"
   } else if (joint_model_type == "GB_aft") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis.stan"
+  } else if (joint_model_type == "GB_aft_logy") {
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-logy.stan"
+  } else if (joint_model_type == "GB_aft_logy_adaptive") {
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-logy-adaptive-grid.stan"
   } else if (joint_model_type == "GP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Process-JM-Hist.stan"
-  } else if (joint_model_type == "aft_only_BP_noRP") {
+  } else if (joint_model_type == "BP_aft") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials.stan"
   } else {
-    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_alt', 'GB_aft', or 'aft_only_BP_noRP'.", joint_model_type))
+    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_aft_alt', 'GB_aft', 'GB_aft_logy', 'GB_aft_logy_adaptive', or 'BP_aft'.", joint_model_type))
   }
   
-  if (joint_model_type %in% c("aft_only_BP_noRP", "BP_alt", "GB_aft")) {
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     stan_data_joint <- convert_data_aft_only(fit_surv = fit_surv,
                                              surv_data = sim_dat$survival,
                                              k_bases = k_bases)
@@ -433,6 +439,29 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
                                                 fit_surv = fit_surv,
                                                 surv_data = sim_dat$survival,
                                                 k_bases = k_bases)
+  }
+
+  if (joint_model_type == "GB_aft_logy") {
+    log_t <- log(stan_data_joint$time)
+    L <- min(log_t)
+    U <- max(log_t)
+
+    stan_data_joint$log_y_lower <- L - 2
+    stan_data_joint$log_y_upper <- U + 2
+  }
+
+  if (joint_model_type == "GB_aft_logy_adaptive") {
+    log_t <- log(stan_data_joint$time)
+    L <- min(log_t)
+    U <- max(log_t)
+
+    stan_data_joint$grid_lower <- L - 2
+    stan_data_joint$grid_upper <- U + 2
+
+    stan_data_joint$a_prior_mean <- mean(log_t) # centre at the mean instead of 0 for better scaling
+    stan_data_joint$a_prior_scale <- 2
+    stan_data_joint$log_b_prior_mean <- 0
+    stan_data_joint$log_b_prior_scale <- 0.5
   }
   
   # Add quantile-based knots for GB_Quantile model
@@ -543,8 +572,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     # ------------------------------------------------------------------
     # 1. Fallback values (aft-only)
     # ------------------------------------------------------------------
-    # BP_alt needs m+1 gamma values (for degree m polynomial)
-    n_gamma <- ifelse(joint_model_type == "BP_alt", stan_data$m + 1, stan_data$m)
+    # BP_aft_alt needs m+1 gamma values (for degree m polynomial)
+    n_gamma <- ifelse(joint_model_type == "BP_aft_alt", stan_data$m + 1, stan_data$m)
     
     fallback <- list(
       beta_surv = rep(0, stan_data$q),    # survival covariates
@@ -576,19 +605,24 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
           sd   = 0.05
         )
       )
+
+      if (joint_model_type == "GB_aft_logy_adaptive") {
+        init_vals$a <- rnorm(1, mean = stan_data$a_prior_mean, sd = 0.1)
+        init_vals$log_b <- rnorm(1, mean = stan_data$log_b_prior_mean, sd = 0.1)
+      }
       
       # Model-specific baseline hazard parameters
       if (joint_model_type == "GP") {
         init_vals$gp_length_scale <- abs(rnorm(1, 0.2, 0.05))
         init_vals$gp_marginal_sd  <- abs(rnorm(1, 0.5, 0.1))
         init_vals$f_gp_raw        <- rnorm(stan_data$m, 0, 0.5)
-      } else if (joint_model_type == "BP_alt") {
-        # BP_alt requires ordered (monotonically increasing) gamma values
+      } else if (joint_model_type == "BP_aft_alt") {
+        # BP_aft_alt requires ordered (monotonically increasing) gamma values
         n_gamma <- length(fallback$gamma)
         gamma_increments <- abs(rnorm(n_gamma, 0.1, 0.02))
         init_vals$gamma <- cumsum(gamma_increments)
       } else {
-        # BP / GB / GB_Quantile / GB_aft
+        # BP / GB / GB_Quantile / GB_aft / GB_aft_logy / GB_aft_logy_adaptive
         n_gamma <- length(fallback$gamma)
         init_vals$gamma <- pmax(
           fallback$gamma + rnorm(n_gamma, 0, 0.01),
@@ -604,7 +638,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # ------
   # Generate initial values for joint model
-  if (joint_model_type %in% c("aft_only_BP_noRP", "BP_alt", "GB_aft")) {
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     init_values_joint <- init_fun_aft_only(sim_dat = sim_dat, stan_data = stan_data_joint, chains = chains, joint_model_type = joint_model_type)
   } else {
     init_values_joint <- init_fun_joint(sim_dat = sim_dat, stan_data = stan_data_joint, chains = chains, joint_model_type = joint_model_type)
@@ -703,10 +737,12 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   return(list(
     censor_prop = mean(sim_dat$survival$status == 0),
     unique_seed = unique_seed,
-    fit_aftgee = fit_aftgee,
-    fit_aftsrr = fit_aftsrr,
-    fit_smoothSurv = fit_smoothSurv,
-    fit_rstpm2 = fit_rstpm2,
+    alt_fit_status = c(
+      aftgee = !is.null(fit_aftgee),
+      aftsrr = !is.null(fit_aftsrr),
+      smoothSurv = !is.null(fit_smoothSurv),
+      rstpm2 = !is.null(fit_rstpm2)
+    ),
     beta_sAFT = rbind(beta_surv_aftgee, beta_surv_aftsrr, beta_surv_smoothSurv, beta_surv_rstpm2),
     joint_summary = summ_joint,
     joint_diagnostics = diag_joint,
@@ -727,7 +763,7 @@ sim_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "0"))
 message(sprintf("SLURM_ARRAY_TASK_ID (also the sim_id): %d", sim_id))
 if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
-# Define configuration grid for ENZAMET
+#### Define configuration grid for ENZAMET ####
 # ENZAMET uses n_patients=1100, max_FU=72, loglogistic distribution
 config_base <- expand.grid(
   n_patients = c(1100),

@@ -12,7 +12,7 @@
 
 # --- Load required modules ---
 module purge
-module load r
+module load r/4.4.0-gfbf-2023a # load the same version in the ENZAMET.slurm
 
 # --- Run R script ---
 
