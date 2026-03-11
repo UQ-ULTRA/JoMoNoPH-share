@@ -9,3 +9,9 @@
 *.pdf
 Bunya/ENZAMET/output/
 Bunya/ENZAMET/figures/
+
+# Ignore extensionless files in Stan/ (compiled executables)
+Stan/*
+!Stan/*.stan
+!Stan/*.R
+!Stan/*.slurm
