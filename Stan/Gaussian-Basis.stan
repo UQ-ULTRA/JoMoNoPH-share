@@ -38,10 +38,10 @@ functions {
       }
     }
 
-    // f_mat = exp(f_mat) ./ tau_aft;  // f_y(y) = f_u(u)/tau
-    // F_mat = exp(F_mat);             // F_u(u)
-    f_mat = exp(f_mat); // test on 20251002
-    F_mat = exp(F_mat).* tau_aft; // test on 20251002
+    f_mat = exp(f_mat) ./ tau_aft;  // f_y(y) = f_u(u)/tau
+    F_mat = exp(F_mat);             // F_u(u)
+    // f_mat = exp(f_mat); // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
+    // F_mat = exp(F_mat).* tau_aft; // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
 
     h0 = f_mat * gamma;
     H0 = F_mat * gamma;
@@ -74,13 +74,23 @@ transformed data {
   vector[m] mu_fix;
   vector[m] sigma_fix;
   
-  mu_fix[1] = 0;
-  mu_fix[m] = 1;
+  // mu_fix[1] = 0;
+  // mu_fix[m] = 1;
   
-  sigma_fix = rep_vector(2.0/(3.0*(m-1.0)), m);    
+  // sigma_fix = rep_vector(2.0/(3.0*(m-1.0)), m);    
   
-  for (k in 1:(m-2)) {
-    mu_fix[k+1] = k * 1.0 / (m-1);  // equally spaced in (0,1)
+  // for (k in 1:(m-2)) {
+  //   mu_fix[k+1] = k * 1.0 / (m-1);  // equally spaced in (0,1)
+  // }
+
+  if (m == 1) {
+    mu_fix[1] = 0.5;
+    sigma_fix[1] = 0.5;  // or another broad default
+  } else {
+    for (k in 1:m) {
+      mu_fix[k] = (k - 1.0) / (m - 1.0);
+    }
+    sigma_fix = rep_vector(2.0 / (3.0 * (m - 1.0)), m);
   }
 }
 

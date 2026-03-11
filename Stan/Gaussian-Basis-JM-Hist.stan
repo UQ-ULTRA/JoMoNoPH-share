@@ -98,10 +98,10 @@ functions {
       }
     }
 
-    // f_mat = exp(f_mat) ./ tau_aft;  // f_y(y) = f_u(u)/tau
-    // F_mat = exp(F_mat);             // F_u(u)
-    f_mat = exp(f_mat); // test on 20251002
-    F_mat = exp(F_mat).* tau_aft; // test on 20251002
+    f_mat = exp(f_mat) ./ tau_aft;  // f_y(y) = f_u(u)/tau
+    F_mat = exp(F_mat);             // F_u(u)
+    // f_mat = exp(f_mat); // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
+    // F_mat = exp(F_mat).* tau_aft; // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
 
     h0 = f_mat * gamma;
     H0 = F_mat * gamma;

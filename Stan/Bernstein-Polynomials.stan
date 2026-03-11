@@ -1,7 +1,7 @@
 
 // Functions
 functions {
-  // AFT joint survival log likelihood 
+  // AFT survival-only log-likelihood 
   vector loglik_aft(
     vector time,
     vector beta_surv,
@@ -33,10 +33,10 @@ functions {
       }
     }
     
-    // b2 = exp(b2) ./ tau_aft;
-    // B2 = exp(B2);
-    b2 = exp(b2); // test on 20251002
-    B2 = exp(B2) .* tau_aft; // test on 20251002
+    b2 = exp(b2) ./ tau_aft;
+    B2 = exp(B2);
+    // b2 = exp(b2); // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
+    // B2 = exp(B2) .* tau_aft; // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
     h0 = b2 * gamma;
     H0 = B2 * gamma;
 
