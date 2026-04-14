@@ -47,7 +47,7 @@ rm(list=ls())
 # Options: "BP", "GB", "GB_Quantile", "GP"
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
-models_to_plot <- c("GB")  # <-- CHANGE THIS to select models
+models_to_plot <- c("BP","GB")  # <-- CHANGE THIS to select models
 # =============================================================================
 
 ##########
