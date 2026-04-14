@@ -36,6 +36,8 @@ library(ggplot2)
 library(stringr)
 library(conflicted)
 library(here)
+library(flextable)
+library(officer)
 
 rm(list=ls())
 
@@ -45,7 +47,7 @@ rm(list=ls())
 # Options: "BP", "GB", "GB_Quantile", "GP"
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
-models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
+models_to_plot <- c("BP","GB")  # <-- CHANGE THIS to select models
 # =============================================================================
 
 ##########
@@ -291,10 +293,13 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
 #                   1, nchar(tools::file_path_sans_ext(filenames)) - 9) %>%
 #   unique()
 
-# Get all unique config stubs from BP files only (strip last 9 chars before .rds)
+# Get all unique config stubs from selected model files only (strip last 9 chars before .rds)
+models_file_pattern <- paste0(
+  "^(", paste(models_to_plot, collapse = "|"), ")_.*_loglogistic_scen[1-5]_.*\\.rds$"
+)
 filenames <- list.files(
   out_dir,
-  pattern = "^BP_.*_loglogistic_scen[1-5]_.*\\.rds$",
+  pattern = models_file_pattern,
   full.names = FALSE
 )
 
@@ -352,6 +357,95 @@ if (nrow(summary_wide) > 0) {
     dplyr::arrange(variable) %>%
     flextable::flextable()
 }
+# Runtime aggregation
+##########
+
+runtime_data <- purrr::map2_dfr(
+  names(results_by_config), results_by_config,
+  function(cfg, res) {
+    cfg_parsed <- parse_config(cfg)
+    if (is.null(cfg_parsed)) return(NULL)
+
+    # Re-read all batches for this config to extract runtimes
+    fu_part <- if (!is.null(cfg_parsed$fu) && !is.na(cfg_parsed$fu) && nzchar(cfg_parsed$fu)) {
+      paste0("_", cfg_parsed$fu)
+    } else ""
+    pattern <- paste0(
+      cfg_parsed$bf, "_k", cfg_parsed$k_bases, "_n", cfg_parsed$n,
+      "_cens", cfg_parsed$cens, "_", cfg_parsed$dist,
+      "_scen", cfg_parsed$scenario, fu_part,
+      "(?:_.*)?_batch\\d{3}\\.rds$"
+    )
+    rds_files <- list.files(out_dir, pattern = pattern, full.names = TRUE, recursive = TRUE)
+
+    purrr::map_dfr(rds_files, function(f) {
+      sims <- readRDS(f)
+      purrr::map_dfr(purrr::compact(sims), ~ .x$runtimes)
+    }) %>%
+      dplyr::mutate(
+        config   = cfg,
+        bf       = cfg_parsed$bf,
+        k_bases  = cfg_parsed$k_bases,
+        n        = cfg_parsed$n,
+        cens     = cfg_parsed$cens,
+        scenario = cfg_parsed$scenario
+      )
+  }
+)
+
+if (nrow(runtime_data) > 0) {
+  runtime_summary <- runtime_data %>%
+    dplyr::group_by(bf, k_bases, n, cens, scenario) %>%
+    dplyr::summarise(
+      n_sims         = dplyr::n(),
+      mean_total_s   = mean(total_time,       na.rm = TRUE),
+      median_total_s = median(total_time,     na.rm = TRUE),
+      sd_total_s     = sd(total_time,         na.rm = TRUE),
+      mean_stan_s    = mean(joint_stan_time,  na.rm = TRUE),
+      mean_lme_s     = mean(lme_time,         na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      mean_total_min  = round(mean_total_s  / 60, 2),
+      mean_stan_min   = round(mean_stan_s   / 60, 2)
+    ) %>%
+    dplyr::arrange(bf, k_bases, cens, scenario)
+
+  message("\n=== RUNTIME SUMMARY (seconds) ===")
+  print(as.data.frame(runtime_summary))
+
+  # Boxplot of total runtime per config
+  p_runtime <- runtime_data %>%
+    dplyr::mutate(
+      config_label = paste0(bf, " k=", k_bases, ", c=", cens, "%, S", scenario),
+      total_min    = total_time / 60
+    ) %>%
+    ggplot2::ggplot(ggplot2::aes(x = factor(scenario), y = total_min, fill = factor(cens))) +
+    ggplot2::geom_boxplot(outlier.size = 0.5, alpha = 0.8) +
+    ggplot2::facet_wrap(~ paste0(bf, " k=", k_bases), ncol = 3) +
+    ggplot2::scale_fill_manual(values = c("0" = "#4E79A7", "50" = "#F28E2B"),
+                               name   = "Censoring (%)") +
+    ggplot2::labs(
+      title = "Stan runtime per simulation",
+      x     = "Scenario",
+      y     = "Total runtime (minutes)"
+    ) +
+    ggplot2::theme_bw()
+
+  print(p_runtime)
+
+  ggplot2::ggsave(
+    filename = file.path(fig_dir, "fig_runtimes.pdf"),
+    plot     = p_runtime,
+    width    = 12, height = 6, units = "in"
+  )
+  message("  Saved runtime plot -> fig_runtimes.pdf")
+} else {
+  message("No runtime data found.")
+}
+
+##########
+
 
 # Base reference lines (scenario-independent parameters)
 reference_lines <- tibble::tibble(
@@ -795,7 +889,8 @@ create_gaussian_basis <- function(t, n_bases = 5, t_max = 72) {
 }
 
 # Function to create Bernstein polynomial basis (b_(k,m))
-create_bernstein_basis <- function(t, n_bases = 5, t_max = 72) {
+# (legacy version using t/t_max normalisation — not used in Stan reconstruction)
+create_bernstein_basis_tmax <- function(t, n_bases = 5, t_max = 72) {
   # Normalize time to [0, 1]
   t_norm <- t / t_max
   t_norm <- pmin(pmax(t_norm, 0), 1)  # Clamp to [0, 1]
@@ -1197,6 +1292,8 @@ conflicted::conflict_prefer("mutate", "dplyr")
 conflicted::conflict_prefer("arrange", "dplyr")
 conflicted::conflict_prefer("summarise", "dplyr")
 
+if (nrow(all_filtered_data) > 0 && "variable" %in% names(all_filtered_data)) {
+
 # ------------------------------------------------------------
 # Settings
 # ------------------------------------------------------------
@@ -1393,15 +1490,15 @@ p_cov <- ggplot(cov_sum, aes(x = Scenario, y = coverage, group = k)) +
 # ------------------------------------------------------------
 # SAVE as PNGs
 # ------------------------------------------------------------
-out_dir <- here("Bunya/ENZAMET/figures/performance")
-if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+out_perf_dir <- here("Bunya/ENZAMET/figures/performance")
+if (!dir.exists(out_perf_dir)) dir.create(out_perf_dir, recursive = TRUE)
 
-ggsave(file.path(out_dir, "bias_distributions_scen1_5.png"),    p_bias,   width = 14, height = 8, dpi = 300)
-ggsave(file.path(out_dir, "abs_error_distributions_scen1_5.png"), p_abserr, width = 14, height = 8, dpi = 300)
-ggsave(file.path(out_dir, "rmse_summary_scen1_5.png"),         p_rmse,   width = 14, height = 8, dpi = 300)
-ggsave(file.path(out_dir, "coverage_scen1_5.png"),             p_cov,    width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_perf_dir, "bias_distributions_scen1_5.png"),    p_bias,   width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_perf_dir, "abs_error_distributions_scen1_5.png"), p_abserr, width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_perf_dir, "rmse_summary_scen1_5.png"),         p_rmse,   width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_perf_dir, "coverage_scen1_5.png"),             p_cov,    width = 14, height = 8, dpi = 300)
 
-message("Saved plots to: ", out_dir)
+message("Saved plots to: ", out_perf_dir)
 
 # ============================================================
 # OPTIONAL (RECOMMENDED) — avoid mixing distributions
@@ -1419,3 +1516,7 @@ message("Saved plots to: ", out_dir)
 # Then parse dist from config_full using parse_config(), and filter:
 #   filter(dist == "loglogistic")
 # ============================================================
+
+} else {
+  message("No filtered data available — skipping performance plots.")
+}
