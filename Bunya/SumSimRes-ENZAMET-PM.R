@@ -39,6 +39,10 @@ library(here)
 library(flextable)
 library(officer)
 
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::select)
+conflicts_prefer(dplyr::lag)
+
 rm(list=ls())
 
 # =============================================================================
@@ -47,7 +51,7 @@ rm(list=ls())
 # Options: "BP", "GB", "GB_Quantile", "GP"
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
-models_to_plot <- c("BP","GB")  # <-- CHANGE THIS to select models
+models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
 # =============================================================================
 
 ##########
@@ -60,8 +64,15 @@ bunya <- FALSE
 
 if (bunya==TRUE) {
   out_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "output")
+  fig_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "figures")
 } else {
   out_dir <- here::here("Bunya", "ENZAMET", "output")
+  fig_dir <- here::here("Bunya", "ENZAMET", "figures")
+}
+
+if (!dir.exists(fig_dir)) {
+  dir.create(fig_dir, recursive = TRUE)
+  message("Created directory: ", fig_dir)
 }
 
 # out_dir <- "C:/Users/uqamar43/OneDrive - The University of Queensland/02 shared HERA ULTRA/04 Stat Methods/08 JoMoNoPH/Biometrical-Journal/Sim-Results"
@@ -778,9 +789,10 @@ scenario_refs <- tibble::tibble(
 # Shared palette - for BP/GB combinations
 # Generate 84 distinct colors (7 scenarios × 2 censoring × 2 basis × 3 k values)
 custom_palette <- rep(c(
-  "#A6CEE3", "#1F78B4",  # BP k=5, GB k=5
-  "#CAB2D6", "#6A3D9A",  # BP k=7, GB k=7
-  "#FCCDE5", "#BC80BD"   # BP k=9, GB k=9
+  # Light versions (1-5)
+  "#A6CEE3", "#CAB2D6", "#FCCDE5", "#B2DF8A", "#FDBF6F",
+  # Dark versions (6-10, same hues as 1-5)
+  "#1F78B4", "#6A3D9A", "#BC80BD", "#33A02C", "#FF7F00"
 ), times = 14)  # Repeat for 7 scenarios × 2 censoring levels
 
 ##########
@@ -830,7 +842,7 @@ fig_1L <- all_filtered_data %>%
   ggplot2::labs(
     x = "Configuration",
     y = "Posterior Mean",
-    title = "Posterior Means - ENZAMET (Loglogistic Hazard, 7 Scenarios, 0%/50% Censoring)"
+    title = "Posterior Means - ENZAMET (Loglogistic Hazard, 5 Treatment effect scenarios, 0%/50% Censoring)"
   )
 
 print(fig_1L)
@@ -839,18 +851,6 @@ print(fig_1L)
 ##########
 
 message("\n=== SAVING FIGURES ===")
-
-# Create figures directory if it doesn't exist
-fig_dir <- if (bunya==TRUE) {
-  here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "figures")
-} else {
-  here::here("Bunya", "ENZAMET", "figures")
-}
-
-if (!dir.exists(fig_dir)) {
-  dir.create(fig_dir, recursive = TRUE)
-  message("Created directory: ", fig_dir)
-}
 
 # Save ENZAMET loglogistic plot
 ggplot2::ggsave(filename = file.path(fig_dir, "fig_ENZAMET_loglogistic.pdf"),
