@@ -16,8 +16,10 @@ functions {
     vector[n] h0;
     vector[n] H0;
     vector[n] y;
+    vector[n] linpred_surv;
     
-    y = exp(-(X_surv*beta_surv))  .* time;
+    linpred_surv = X_surv * beta_surv;
+    y = exp(-linpred_surv) .* time;
     
     real eps = 1e-6;
     real tau_aft = max(y) + eps;
@@ -29,18 +31,17 @@ functions {
     for (k in 1:m) {
       for (i in 1:n) {
         b2[i,k] = beta_lpdf(y_alt[i] | k, (m - k + 1));
-        B2[i,k] = beta_lcdf(y_alt[i] | k, (m - k + 1));
+        B2[i,k] = beta_cdf(y_alt[i] | k, (m - k + 1));
       }
     }
     
     b2 = exp(b2) ./ tau_aft;
-    B2 = exp(B2);
     // b2 = exp(b2); // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
     // B2 = exp(B2) .* tau_aft; // test on 20251002, found this wrong on 20260310, revert back to original (was correct)
-    h0 = b2 * gamma;
+    h0 = fmax(b2 * gamma, 1e-12);
     H0 = B2 * gamma;
 
-    log_lik = ((log(h0) - (X_surv * beta_surv)) .* status) - H0;
+    log_lik = ((log(h0) - linpred_surv) .* status) - H0;
     return log_lik;
   }
   
@@ -87,4 +88,3 @@ model {
   // survival likelihood
   target += sum(log_lik);
 }
-
