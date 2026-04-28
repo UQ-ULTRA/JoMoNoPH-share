@@ -27,7 +27,7 @@
 #                    (b) simulate joint data
 #                    (c) fit LME on longitudinal outcome (unless AFT-only model)
 #                    (d) fit simple AFT model (survreg) as a staging model / prior anchor
-#                    (e) fit chosen Stan model (BP/GB/GB_Quantile/GP/BP_aft_alt/GB_aft/BP_aft)
+#                    (e) fit chosen Stan model (BP/GB/GB_Quantile/GP/BP_aft_alt/BP_aft_logy/GB_aft/BP_aft)
 #                    (f) return summaries + diagnostics + runtime + LOO/WAIC
 # 4. SLURM job mapping: SLURM_ARRAY_TASK_ID → (config_id, batch_id) → trial_ids
 # 5. Results saved as one RDS per batch; script skips work if output already exists
@@ -38,6 +38,7 @@
 # - GB_Quantile: Gaussian Basis with quantile-based knots (joint model)
 # - GP: Gaussian Process baseline hazard (joint model)
 # - BP_aft_alt: AFT model only, Bernstein Polynomials with ordered parameters, no roughness penalty
+# - BP_aft_logy: AFT model only, Bernstein Polynomials on log(y), no roughness penalty
 # - GB_aft: AFT model only, Gaussian Basis, no roughness penalty
 # - GB_aft_logy: AFT model only, Gaussian Basis on log(y), no roughness penalty
 # - GB_aft_logy_adaptive: AFT model only, Gaussian Basis on log(y) with adaptive grid, no roughness penalty
@@ -56,7 +57,7 @@
 # - Timeouts: each trial is capped by an elapsed wall-time limit (safe_elapsed).
 #
 # WHERE TO CHANGE THINGS (COMMON EDIT POINTS):
-# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP" / "BP_aft_alt" / "GB_aft" / "GB_aft_logy" / "GB_aft_logy_adaptive" / "BP_aft"
+# - Choose baseline hazard model: joint_model_type <- "BP" / "GB" / "GB_Quantile" / "GP" / "BP_aft_alt" / "BP_aft_logy" / "GB_aft" / "GB_aft_logy" / "GB_aft_logy_adaptive" / "BP_aft"
 # - Choose basis dimension: k_bases (often overridden by config_grid)
 # - Choose scenarios and censoring: config_base, lambda_map, cfg_default/cfg_zero
 # - Batch sizing: batch_size, sims_per_config
@@ -108,15 +109,212 @@ cpus_per_sim <- chains * threads_per_chain
 # Will be set from config_grid during execution
 k_bases = 5  # Default, will be overridden
 
-# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
-joint_model_type <- "GB_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+# Margin on the log-time scale used to extend fixed support for log(y) models.
+# Current value preserves the existing support rule:
+#   exp(2) ≈ 7.4x wider on each side of the observed time range.
+log_support_margin <- 2
 
-if (joint_model_type == "BP_aft") {
+# Store a compact posterior reconstruction of the AFT-only baseline
+# hazard/cumulative hazard for plotting. This avoids saving full CmdStan fit
+# objects; joint-model baseline reconstruction needs separate model-specific
+# logic and is intentionally not handled here yet.
+baseline_recon_grid_size <- 200
+baseline_recon_draws_max <- 500
+
+# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
+joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+
+if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
   library(aftgee) # alternative semiparametric AFT model
   library(smoothSurv) # alternative semiparametric AFT model
   library(rstpm2) # alternative semiparametric AFT model
   # library(spsurv) # alternative semiparametric AFT model
 }
+##########
+
+
+# AFT-only baseline reconstruction helpers
+##########
+
+extract_indexed_draws <- function(draws_mat, parameter) {
+  idx <- grep(paste0("^", parameter, "\\["), colnames(draws_mat))
+  if (length(idx) == 0) {
+    stop("No posterior draws found for parameter: ", parameter)
+  }
+
+  parameter_index <- as.integer(sub(
+    paste0("^", parameter, "\\[([0-9]+)\\]$"),
+    "\\1",
+    colnames(draws_mat)[idx]
+  ))
+  idx <- idx[order(parameter_index)]
+  draws_mat[, idx, drop = FALSE]
+}
+
+select_reconstruction_draws <- function(n_draws, max_draws) {
+  n_keep <- min(n_draws, max_draws)
+  unique(round(seq(1, n_draws, length.out = n_keep)))
+}
+
+summarise_curve_draws <- function(draw_matrix, prefix) {
+  tibble::tibble(
+    !!paste0(prefix, "_mean") := colMeans(draw_matrix),
+    !!paste0(prefix, "_q2.5") := apply(draw_matrix, 2, stats::quantile, probs = 0.025, na.rm = TRUE),
+    !!paste0(prefix, "_q97.5") := apply(draw_matrix, 2, stats::quantile, probs = 0.975, na.rm = TRUE)
+  )
+}
+
+build_fixed_basis_knots <- function(m) {
+  if (m == 1) {
+    return(list(mu = 0.5, sigma = 0.5))
+  }
+
+  list(
+    mu = seq(0, 1, length.out = m),
+    sigma = rep(2.0 / (3.0 * (m - 1.0)), m)
+  )
+}
+
+build_fixed_logy_gaussian_knots <- function(m, log_y_lower, log_y_upper) {
+  span <- log_y_upper - log_y_lower
+  if (span <= 0) {
+    stop("log_y_upper must be greater than log_y_lower.")
+  }
+
+  if (m == 1) {
+    return(list(
+      mu = 0.5 * (log_y_lower + log_y_upper),
+      sigma = 0.5 * span
+    ))
+  }
+
+  list(
+    mu = seq(log_y_lower, log_y_upper, length.out = m),
+    sigma = rep(2.0 * span / (3.0 * (m - 1.0)), m)
+  )
+}
+
+bernstein_pdf_matrix <- function(u, m) {
+  basis <- sapply(seq_len(m), function(k) stats::dbeta(u, shape1 = k, shape2 = m - k + 1))
+  if (m == 1) matrix(basis, ncol = 1) else basis
+}
+
+bernstein_cdf_matrix <- function(u, m) {
+  basis <- sapply(seq_len(m), function(k) stats::pbeta(u, shape1 = k, shape2 = m - k + 1))
+  if (m == 1) matrix(basis, ncol = 1) else basis
+}
+
+gaussian_pdf_matrix <- function(x, mu, sigma) {
+  basis <- sapply(seq_along(mu), function(k) stats::dnorm(x, mean = mu[k], sd = sigma[k]))
+  if (length(mu) == 1) matrix(basis, ncol = 1) else basis
+}
+
+gaussian_cdf_matrix <- function(x, mu, sigma) {
+  basis <- sapply(seq_along(mu), function(k) stats::pnorm(x, mean = mu[k], sd = sigma[k]))
+  if (length(mu) == 1) matrix(basis, ncol = 1) else basis
+}
+
+build_aft_baseline_reconstruction <- function(fit,
+                                              stan_data,
+                                              joint_model_type,
+                                              t_max,
+                                              n_grid = 200,
+                                              max_draws = 500) {
+  supported_models <- c("BP_aft", "GB_aft", "BP_aft_logy", "GB_aft_logy")
+  # BP_aft_alt, GB_aft_logy_adaptive, and joint models need separate
+  # reconstruction logic; do not silently use the wrong basis/support rule.
+  if (!joint_model_type %in% supported_models) {
+    return(NULL)
+  }
+
+  draws_mat <- as.matrix(posterior::as_draws_matrix(
+    fit$draws(variables = c("beta_surv", "gamma"))
+  ))
+  keep_rows <- select_reconstruction_draws(nrow(draws_mat), max_draws)
+  draws_mat <- draws_mat[keep_rows, , drop = FALSE]
+
+  beta_draws <- extract_indexed_draws(draws_mat, "beta_surv")
+  gamma_draws <- extract_indexed_draws(draws_mat, "gamma")
+  m <- ncol(gamma_draws)
+  n_draws <- nrow(gamma_draws)
+  eps <- 1e-6
+
+  is_logy_model <- joint_model_type %in% c("BP_aft_logy", "GB_aft_logy")
+  t_grid <- seq(if (is_logy_model) eps else 0, t_max, length.out = n_grid)
+
+  h0_draws <- matrix(NA_real_, nrow = n_draws, ncol = n_grid)
+  H0_draws <- matrix(NA_real_, nrow = n_draws, ncol = n_grid)
+  tau_aft <- rep(NA_real_, n_draws)
+
+  if (joint_model_type %in% c("BP_aft", "GB_aft")) {
+    time <- stan_data$time
+    X_surv <- stan_data$X_surv
+
+    for (draw_id in seq_len(n_draws)) {
+      linpred <- as.vector(X_surv %*% beta_draws[draw_id, ])
+      y <- exp(-linpred) * time
+      tau_aft[draw_id] <- max(y) + eps
+      u <- pmin(pmax(t_grid / tau_aft[draw_id], eps), 1 - eps)
+
+      if (joint_model_type == "BP_aft") {
+        pdf_basis <- bernstein_pdf_matrix(u, m)
+        cdf_basis <- bernstein_cdf_matrix(u, m)
+      } else {
+        knots <- build_fixed_basis_knots(m)
+        pdf_basis <- gaussian_pdf_matrix(u, knots$mu, knots$sigma)
+        cdf_basis <- gaussian_cdf_matrix(u, knots$mu, knots$sigma)
+      }
+
+      h0_draws[draw_id, ] <- as.vector(pdf_basis %*% gamma_draws[draw_id, ]) / tau_aft[draw_id]
+      H0_draws[draw_id, ] <- as.vector(cdf_basis %*% gamma_draws[draw_id, ])
+      H0_draws[draw_id, t_grid == 0] <- 0
+    }
+  } else if (joint_model_type == "BP_aft_logy") {
+    span <- stan_data$log_y_upper - stan_data$log_y_lower
+    u <- pmin(
+      pmax((log(t_grid) - stan_data$log_y_lower) / span, eps),
+      1 - eps
+    )
+    pdf_basis <- bernstein_pdf_matrix(u, m)
+    cdf_basis <- bernstein_cdf_matrix(u, m)
+    h_basis <- sweep(pdf_basis, 1, span * t_grid, "/")
+
+    h0_draws <- gamma_draws %*% t(h_basis)
+    H0_draws <- gamma_draws %*% t(cdf_basis)
+  } else if (joint_model_type == "GB_aft_logy") {
+    knots <- build_fixed_logy_gaussian_knots(
+      m,
+      stan_data$log_y_lower,
+      stan_data$log_y_upper
+    )
+    log_t_grid <- log(t_grid)
+    pdf_basis <- gaussian_pdf_matrix(log_t_grid, knots$mu, knots$sigma)
+    cdf_basis <- gaussian_cdf_matrix(log_t_grid, knots$mu, knots$sigma)
+    h_basis <- sweep(pdf_basis, 1, t_grid, "/")
+
+    h0_draws <- gamma_draws %*% t(h_basis)
+    H0_draws <- gamma_draws %*% t(cdf_basis)
+  }
+
+  curve <- dplyr::bind_cols(
+    tibble::tibble(time = t_grid),
+    summarise_curve_draws(h0_draws, "h0"),
+    summarise_curve_draws(H0_draws, "H0")
+  )
+
+  list(
+    model = joint_model_type,
+    time_scale = "baseline accelerated time",
+    n_draws_used = n_draws,
+    tau_aft = if (all(is.na(tau_aft))) NULL else c(
+      mean = mean(tau_aft),
+      q2.5 = unname(stats::quantile(tau_aft, 0.025)),
+      q97.5 = unname(stats::quantile(tau_aft, 0.975))
+    ),
+    curve = curve
+  )
+}
+
 ##########
 
 
@@ -345,7 +543,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   # Track runtime for LME fit
   t_lme_start <- Sys.time()
   fit_long <- NULL
-  if (!joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+  if (!joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     fit_long <- nlme::lme(
       fixed = Y_obs ~ time + time_by_arm,
       random = ~ time | id,
@@ -364,7 +562,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   
   #### fit alternative semiparametric AFT models (aftgee, aftssr, smoothSurv, rstpm2, spsurv) ####
-  if (joint_model_type == "BP_aft") {
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     # Weibull parametric AFT model
     fit_weibull <- tryCatch({
       survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival, dist = "weibull")
@@ -372,14 +570,14 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       message("Weibull AFT fit failed: ", e$message)
       NULL
     })
-    beta_surv_weibull = fit_weibull$coefficients[-1]
+    beta_surv_weibull = if (is.null(fit_weibull)) NA_real_ else fit_weibull$coefficients[-1]
     fit_loglogistic <- tryCatch({
       survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival, dist = "loglogistic")
     }, error = function(e) {
       message("Log-logistic AFT fit failed: ", e$message)
       NULL
     })
-    beta_surv_loglogistic = fit_loglogistic$coefficients[-1]
+    beta_surv_loglogistic = if (is.null(fit_loglogistic)) NA_real_ else fit_loglogistic$coefficients[-1]
     # least-square-based method (with bootstrap method for variance estimation)
     fit_aftgee <- tryCatch({
       aftgee::aftgee(Surv(time, status) ~ arm, data = sim_dat$survival)
@@ -387,7 +585,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       message("aftgee fit failed: ", e$message)
       NULL
     })
-    beta_surv_aftgee = fit_aftgee$coef.res[-1]
+    beta_surv_aftgee = if (is.null(fit_aftgee)) NA_real_ else fit_aftgee$coef.res[-1]
     # rank-based method (with induced smoothing method for variance estimation)
     fit_aftsrr <- tryCatch({
       aftgee::aftsrr(Surv(time, status) ~ arm, data = sim_dat$survival, se = "ISMB")
@@ -395,7 +593,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       message("aftgee fit failed: ", e$message)
       NULL
     })
-    beta_surv_aftsrr = fit_aftsrr$beta
+    beta_surv_aftsrr = if (is.null(fit_aftsrr)) NA_real_ else fit_aftsrr$beta
     # Komarek's likelihood-based error distribution smoothing method
     fit_smoothSurv <- tryCatch({
       smoothSurv::smoothSurvReg(Surv(time, status) ~ arm, data = sim_dat$survival)
@@ -403,7 +601,11 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       message("smoothSurv fit failed: ", e$message)
       NULL
     })
-    beta_surv_smoothSurv = fit_smoothSurv$regres[-c(1, NROW(fit_smoothSurv$regres)-1, NROW(fit_smoothSurv$regres)), 1]
+    beta_surv_smoothSurv = if (is.null(fit_smoothSurv)) {
+      NA_real_
+    } else {
+      fit_smoothSurv$regres[-c(1, NROW(fit_smoothSurv$regres)-1, NROW(fit_smoothSurv$regres)), 1]
+    }
     # Crowther et al. (2022) flexible parametric AFT method
     fit_rstpm2 <- tryCatch({
       rstpm2::aft(Surv(time, status) ~ arm, data = sim_dat$survival, df = k_bases)
@@ -412,7 +614,11 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       NULL
     })
     # beta_surv_rstpm2 = summary(fit_rstpm2)@coef[-((NROW(summary(fit_rstpm2)@coef)-k_bases+1):NROW(summary(fit_rstpm2)@coef)),1]
-    beta_surv_rstpm2 = fit_rstpm2@coef[-c((length(fit_rstpm2@coef)-k_bases+1):length(fit_rstpm2@coef))]
+    beta_surv_rstpm2 = if (is.null(fit_rstpm2)) {
+      NA_real_
+    } else {
+      fit_rstpm2@coef[-c((length(fit_rstpm2@coef)-k_bases+1):length(fit_rstpm2@coef))]
+    }
     
     # # spsurv semiparametric AFT with Bernstein polynomials (mle)
     # fit_spsurv_mle <- tryCatch({
@@ -444,7 +650,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     x = TRUE
   )
   
-  # Prepare data for joint model (BP, GB, GB_Quantile, GP, BP_aft_alt, GB_aft, GB_aft_logy, GB_aft_logy_adaptive, or BP_aft)
+  # Prepare data for joint model (BP, GB, GB_Quantile, GP, BP_aft_alt, BP_aft_logy, GB_aft, GB_aft_logy, GB_aft_logy_adaptive, or BP_aft)
   if (joint_model_type == "BP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist.stan"
     # stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-DM.stan"  # 20260129
@@ -454,6 +660,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-JM-Hist-Quantile.stan"
   } else if (joint_model_type == "BP_aft_alt") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-alt.stan"
+  } else if (joint_model_type == "BP_aft_logy") {
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-logy.stan"
   } else if (joint_model_type == "GB_aft") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis.stan"
   } else if (joint_model_type == "GB_aft_logy") {
@@ -465,10 +673,10 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   } else if (joint_model_type == "BP_aft") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials.stan"
   } else {
-    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_aft_alt', 'GB_aft', 'GB_aft_logy', 'GB_aft_logy_adaptive', or 'BP_aft'.", joint_model_type))
+    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_aft_alt', 'BP_aft_logy', 'GB_aft', 'GB_aft_logy', 'GB_aft_logy_adaptive', or 'BP_aft'.", joint_model_type))
   }
   
-  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     stan_data_joint <- convert_data_aft_only(fit_surv = fit_surv,
                                              surv_data = sim_dat$survival,
                                              k_bases = k_bases)
@@ -479,13 +687,13 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
                                                 k_bases = k_bases)
   }
 
-  if (joint_model_type == "GB_aft_logy") {
+  if (joint_model_type %in% c("BP_aft_logy", "GB_aft_logy")) {
     log_t <- log(stan_data_joint$time)
     L <- min(log_t)
     U <- max(log_t)
 
-    stan_data_joint$log_y_lower <- L - 2
-    stan_data_joint$log_y_upper <- U + 2
+    stan_data_joint$log_y_lower <- L - log_support_margin
+    stan_data_joint$log_y_upper <- U + log_support_margin
   }
 
   if (joint_model_type == "GB_aft_logy_adaptive") {
@@ -493,8 +701,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     L <- min(log_t)
     U <- max(log_t)
 
-    stan_data_joint$grid_lower <- L - 2
-    stan_data_joint$grid_upper <- U + 2
+    stan_data_joint$grid_lower <- L - log_support_margin
+    stan_data_joint$grid_upper <- U + log_support_margin
 
     stan_data_joint$a_prior_mean <- mean(log_t) # centre at the mean instead of 0 for better scaling
     stan_data_joint$a_prior_scale <- 2
@@ -660,7 +868,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
         gamma_increments <- abs(rnorm(n_gamma, 0.1, 0.02))
         init_vals$gamma <- cumsum(gamma_increments)
       } else {
-        # BP / GB / GB_Quantile / GB_aft / GB_aft_logy / GB_aft_logy_adaptive
+        # BP / BP_aft_logy / GB / GB_Quantile / GB_aft / GB_aft_logy / GB_aft_logy_adaptive
         n_gamma <- length(fallback$gamma)
         init_vals$gamma <- pmax(
           fallback$gamma + rnorm(n_gamma, 0, 0.01),
@@ -676,7 +884,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # ------
   # Generate initial values for joint model
-  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     init_values_joint <- init_fun_aft_only(sim_dat = sim_dat, stan_data = stan_data_joint, chains = chains, joint_model_type = joint_model_type)
   } else {
     init_values_joint <- init_fun_joint(sim_dat = sim_dat, stan_data = stan_data_joint, chains = chains, joint_model_type = joint_model_type)
@@ -771,8 +979,30 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   } else {
     data.frame(elpd_waic = NA, p_waic = NA, waic = NA)
   }
+
+  logy_support <- NULL
+  if (all(c("log_y_lower", "log_y_upper") %in% names(stan_data_joint))) {
+    logy_support <- list(
+      log_y_lower = stan_data_joint$log_y_lower,
+      log_y_upper = stan_data_joint$log_y_upper
+    )
+  }
+
+  baseline_recon <- tryCatch({
+    build_aft_baseline_reconstruction(
+      fit = fit_joint,
+      stan_data = stan_data_joint,
+      joint_model_type = joint_model_type,
+      t_max = max_FU,
+      n_grid = baseline_recon_grid_size,
+      max_draws = baseline_recon_draws_max
+    )
+  }, error = function(e) {
+    message("Baseline reconstruction failed: ", e$message)
+    NULL
+  })
   
-  if (joint_model_type == "BP_aft") {
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     return(list(
       censor_prop = mean(sim_dat$survival$status == 0),
       unique_seed = unique_seed,
@@ -785,6 +1015,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       joint_summary = summ_joint,
       joint_diagnostics = diag_joint,
       lme_coefs = coefs,
+      logy_support = logy_support,
+      baseline_recon = baseline_recon,
       runtimes = runtimes,
       loo_joint = loo_joint_est,
       waic_joint = waic_joint_est))
@@ -795,6 +1027,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       joint_summary = summ_joint,
       joint_diagnostics = diag_joint,
       lme_coefs = coefs,
+      logy_support = logy_support,
+      baseline_recon = baseline_recon,
       runtimes = runtimes,
       loo_joint = loo_joint_est,
       waic_joint = waic_joint_est))
@@ -826,20 +1060,28 @@ config_base <- expand.grid(
 )
 
 # lambda_map <- c(weibull = 0.023, loglogistic = 0.013) # under scenario 1, give ~50% censoring
-lambda_table <- data.frame( # need different lambda_c values for different scenarios
+lambda_c_table <- data.frame( # need different lambda_c values for different scenarios
   scenario = rep(1:5, each = 2),
   aft_mode = rep(c("Weibull", "loglogistic"), times = 5),
   lambda_c = c(
+    # Old Bernstein Polynomial approximation:
+    # scenario 1: 0.08154297, 0.05322266
+    # scenario 2: 0.05224609, 0.03320312
+    # scenario 3: 0.05224609, 0.03320312
+    # scenario 4: 0.1289062,  0.08251953
+    # scenario 5: 0.1289062,  0.08251953
+    #
+    # Updated 20260427 after amended Bernstein Polynomial approximation:
     # scenario 1
-    0.08154297, 0.05322266, # for aft only and 50% censoring
+    0.02832031, 0.02587891, # for aft only and 50% censoring
     # scenario 2
-    0.05224609, 0.03320312, # for aft only and 50% censoring
+    0.015625, 0.01391602, # for aft only and 50% censoring
     # scenario 3
-    0.05224609, 0.03320312, # for aft only and 50% censoring
+    0.015625, 0.01391602, # for aft only and 50% censoring
     # scenario 4
-    0.1289062, 0.08251953, # for aft only and 50% censoring
+    0.04638672, 0.04150391, # for aft only and 50% censoring
     # scenario 5
-    0.1289062, 0.08251953 # for aft only and 50% censoring
+    0.04638672, 0.04150391 # for aft only and 50% censoring
   ),
   stringsAsFactors = FALSE
 )
@@ -848,16 +1090,32 @@ lambda_table <- data.frame( # need different lambda_c values for different scena
 #                          lambda_c = lambda_map[tolower(aft_mode)])
 cfg_default <- merge(
   config_base,
-  lambda_table,
+  lambda_c_table,
   by = c("scenario", "aft_mode"),
   all.x = TRUE,
   sort = FALSE
 )
+cfg_default$cens_label <- "50"
 
 cfg_zero <- transform(config_base,
-                      lambda_c = 0) # 0 for no censoring, any value <0 for administrative censoring only
+                      lambda_c = 0,
+                      cens_label = "0") # 0 for no censoring
 
-config_grid <- rbind(cfg_default, cfg_zero)
+# Administrative censoring only at max_FU.
+# lambda_c < 0 triggers T_obs = min(T_i, max_FU), status = I(T_i <= max_FU).
+# Data-Gen-test-DM.R 20260427 administrative-only (aft only) check, loglogistic:
+# scenario 1 avg censoring = 0.2023836
+# scenario 2/3 avg censoring = 0.3155127
+# scenario 4/5 avg censoring = 0.1409127
+# Weibull:
+# scenario 1 avg censoring = 0.2090255
+# scenario 2/3 avg censoring = 0.32196
+# scenario 4/5 avg censoring = 0.1311945
+cfg_admin <- transform(config_base,
+                       lambda_c = -1,
+                       cens_label = "admin")
+
+config_grid <- rbind(cfg_default, cfg_zero, cfg_admin)
 row.names(config_grid) <- NULL
 
 # Define batch structure (e.g. 100 sims per batch, 1000 total sims)
@@ -879,6 +1137,7 @@ aft_mode <- config$aft_mode
 max_FU <- config$max_FU
 k_bases <- config$k_bases
 scenario <- config$scenario
+cens_label <- config$cens_label
 
 # Define trial numbers for this batch
 trial_ids <- ((batch_id - 1) * batch_size + 1):(batch_id * batch_size)
@@ -892,9 +1151,6 @@ config_hash <- config_id # use config_id as hash since it's already a unique int
 message(sprintf("Config ID: %d, Config Hash: %d, n_patients:
 %d, lambda_c: %.5f, aft_mode: %s, k_bases: %d, scenario: %d, max_FU: %d",
 config_id, config_hash, n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU))
-
-# label for censoring used in filename & messages
-cens_label <- if (lambda_c == 0) "0" else "50"
 
 ##########
 # ---- Skip work if this batch output already exists ----
