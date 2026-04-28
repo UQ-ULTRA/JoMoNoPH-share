@@ -143,7 +143,7 @@ library(simsurv)
 # lambda_c <- lambda_c_new
 
 
-####--- Simulation Function ---####
+#### Simulation Function (load this) ####
 simulate_joint_dataset <- function(D, 
                                    beta_0, beta_1, beta_2, sigma_e,
                                    log_HR, alpha_PH, log_AF, alpha_AFT, 
@@ -376,21 +376,28 @@ simulate_joint_dataset <- function(D,
 # # Survival model
 # 
 # # Loglogistic parameters
-# loglogistic_shape <-  1.75   # Unimodal hazard (peak hazard followed by decline)
-# loglogistic_scale <- 12.0    # Survival centered  
+# # Old Bernstein Polynomial approximation:
+# # loglogistic_shape <- 1.75
+# # loglogistic_scale <- 12.0
+# loglogistic_shape <- 1.20
+# loglogistic_scale <- 23.0
 # 
 # # Baseline and treatment effects on log-hazard scale
 # log_baseline_hazard <- 99          # Baseline log-hazard (intercept)
 # log_HR <- 99                      # Log hazard ratio for treatment (HR = exp(log_HR))
 # 
 # # Weibull shape parameter (ν): controls time dependence of the hazard
-# weibull_shape <- 0.692                 # Shape > 1 ⇒ increasing hazard over time
+# # Old Bernstein Polynomial approximation:
+# # weibull_shape <- 0.692
+# weibull_shape <- 0.70
 # 
 # # Convert baseline log-hazard to hazard rate (λ)
 # baseline_hazard_rate <- exp(log_baseline_hazard)  # Used as λ in simsurv
 # 
 # # Convert to Weibull scale parameter for use in rweibull/survreg
-# weibull_scale <- 13.823
+# # Old Bernstein Polynomial approximation:
+# # weibull_scale <- 13.823
+# weibull_scale <- 38.0
 # 
 # # Compute acceleration factor (AF) under Weibull interpretation
 # log_AF <- -log_HR / weibull_shape
@@ -420,6 +427,7 @@ simulate_joint_dataset <- function(D,
 ###### above copied from Data-Gen-ENZAMET-01.R ######
 
 ###### single test of simulate_joint_dataset() function ######
+# single test for joint model data generation
 sim_data <- simulate_joint_dataset(
   D = matrix(c(15^2, -0.3, -0.3, 0.20^2), 2, 2),
   beta_0 = 73,
@@ -430,10 +438,15 @@ sim_data <- simulate_joint_dataset(
   log_AF = 0.00,
   alpha_PH = 99,
   alpha_AFT = 0,
-  weibull_shape= 0.692,
-  weibull_scale= 13.823,
-  loglogistic_shape = 1.75,
-  loglogistic_scale = 12.0,
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
   visit = c(0, 1, seq(3, 92, 3)),
   seed = 32,
   n_patients = 1100,
@@ -443,7 +456,7 @@ sim_data <- simulate_joint_dataset(
   link_type = "value" # "value" or "slope"
 )
 
-# test for aft only data generation
+# single test for aft only data generation
 sim_data <- simulate_joint_dataset(
   D = matrix(c(0, 0, 0, 0), 2, 2),
   beta_0 = 0,
@@ -454,10 +467,15 @@ sim_data <- simulate_joint_dataset(
   log_AF = 0,
   alpha_PH = 0,
   alpha_AFT = 0,
-  weibull_shape= 0.692,
-  weibull_scale= 13.823,
-  loglogistic_shape = 1.75,
-  loglogistic_scale = 12.0,
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
   visit = c(0, 1, seq(3, 92, 3)),
   seed = 32,
   n_patients = 1100,
@@ -471,7 +489,7 @@ mean(sim_data$survival$status)
 
 
 
-############## average censoring function (slow version, ignore) ###############
+############## average censoring function (slow version, ignore and skip) ###############
 # create a function to use a number of repeated simulations (randomness controlled by seeds) to calculate the average censoring proportion
 avg_censoring <- function(lambda_c, seeds, n_patients, n_cores = 4, ...) {
   censoring_prop <- numeric(length(seeds))
@@ -494,7 +512,7 @@ avg_censoring <- function(lambda_c, seeds, n_patients, n_cores = 4, ...) {
   )
 }
 
-###### Example simulation to test avg_censoring() function (ignore) ######
+###### Example simulation to test avg_censoring() function (ignore and skip) ######
 avg_censoring(
   lambda_c = 0.05331733,
   # generate 10 random integers as seeds
@@ -511,17 +529,22 @@ avg_censoring(
   log_AF = 0.00,
   alpha_PH = 99,
   alpha_AFT = 0,
-  weibull_shape= 0.692,
-  weibull_scale= 13.823,
-  loglogistic_shape = 1.75,
-  loglogistic_scale = 12.0,
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
   visit = c(0, 1, seq(3, 92, 3)),
   max_FU = 72,
   aft_mode =  "loglogistic",
   link_type = "value"
 )
 
-############# average censoring function parallel version (on Macbook Pro 14-inch M2pro) ###############
+############# average censoring function parallel version (on Macbook Pro 14-inch M2pro, load this) ###############
 library(parallel)
 
 avg_censoring_parallel <- function(lambda_c,
@@ -565,7 +588,7 @@ avg_censoring_parallel <- function(lambda_c,
     n_failed = sum(is.na(censoring_prop))
   )
 }
-###### Example simulation to test avg_censoring_parallel() function ###### 
+###### Example simulation to test avg_censoring_parallel() function (ignore and skip) ###### 
 avg_censoring_parallel(
   lambda_c = 0.05331733,
   seeds = sample(1:1e8, 10, replace = FALSE),
@@ -581,17 +604,22 @@ avg_censoring_parallel(
   log_AF = 0.00,
   alpha_PH = 99,
   alpha_AFT = 0,
-  weibull_shape= 0.692,
-  weibull_scale= 13.823,
-  loglogistic_shape = 1.75,
-  loglogistic_scale = 12.0,
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
   visit = c(0, 1, seq(3, 92, 3)),
   max_FU = 72,
   aft_mode =  "loglogistic",
   link_type = "value"
 )
 
-############# a function to find lambda_c for target censoring proportion ###############
+############# a function to find lambda_c for target censoring proportion (load this) ###############
 
 # a function to calibrate lambda_c for target censoring proportion using bisection method
 calibrate_lambda_c <- function(target_cens,
@@ -681,7 +709,7 @@ calibrate_lambda_c <- function(target_cens,
 }
 
 
-###### Example usage of calibrate_lambda_c() function ######
+###### Example usage of calibrate_lambda_c() function using 100 seeds ######
 # use the same parameters as what used in the actual simulation to get accurate lambda_c
 res <- calibrate_lambda_c(
   target_cens = 0.10,
@@ -692,16 +720,21 @@ res <- calibrate_lambda_c(
   tol = 0.001, # tolerance for difference between target censoring and average censoring proportions
   D = matrix(c(15^2, -0.10, -0.10, 0.20^2), 2, 2),
   beta_0 = 73, beta_1 = -0.04,
-  beta_2 = 0, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
+  beta_2 = 0.00, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
   sigma_e = 12,
   log_HR = 99,
   alpha_PH = 99,
-  log_AF = 0, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
+  log_AF = 0.00, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
   alpha_AFT = 0, # try no association
-  weibull_shape = 0.692,
-  weibull_scale = 13.823,
-  loglogistic_shape = 1.75,
-  loglogistic_scale = 12.0,
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
   visit = c(0, 1, seq(3, 92, 3)),
   max_FU = 72,
   aft_mode = "loglogistic", # loglogistic or Weibull
@@ -732,7 +765,7 @@ res$avg_censoring
 
 # seeds = 1e6 * as.integer(as.numeric(as.factor(paste(n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU, sep = "_")))) + 1:
 # seeds = 1e6 * as.integer(as.numeric(as.factor(paste(c(1100), c(0.05322266, 0.03295898, 0.08300781), c("Weibull", "loglogistic"), c(5), c(1,2,4), c(72), sep = "_"))))
-# find lambda_c's for aft only data generation
+##### find lambda_c's for "aft only" data generation using 500 seeds (run this) #####
 res <- calibrate_lambda_c(
   target_cens = 0.50,
   # seeds = 1:100, # use 1:100 seeds
@@ -743,19 +776,24 @@ res <- calibrate_lambda_c(
   tol = 0.001, # tolerance for difference between target censoring and average censoring proportions
   D = matrix(c(0^2, 0, 0, 0^2), 2, 2),
   beta_0 = 0, beta_1 = 0,
-  beta_2 = 0, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
+  beta_2 = 0.00, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
   sigma_e = 0,
   log_HR = 0,
   alpha_PH = 0,
   log_AF = -0.90, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
-  alpha_AFT = 0, # try no association
-  weibull_shape = 0.692,
-  weibull_scale = 13.823,
-  loglogistic_shape = 1.75,
-  loglogistic_scale = 12.0,
+  alpha_AFT = 0, # try no association, aft only
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
   visit = c(0, 1, seq(3, 92, 3)),
   max_FU = 72,
-  aft_mode = "loglogistic", # loglogistic or Weibull
+  aft_mode = "Weibull", # loglogistic or Weibull
   link_type = "value"
 )
 
@@ -763,6 +801,7 @@ res$lambda_c
 res$avg_censoring
 
 # calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# for the old Bernstein Polynomial approximation: weibull_shape = 0.692, weibull_scale = 13.823,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.08203125
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.05175781
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90): lambda_c = 0.05175781
@@ -770,6 +809,7 @@ res$avg_censoring
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90): lambda_c = 0.1298828
 
 # calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# for the old Bernstein Polynomial approximation: loglogistic_shape = 1.75, loglogistic_scale = 12.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.05322266
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.03295898; (1e6*1+1):(1e6*1+100) seeds produce lambda_c = 0.03320312
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90): lambda_c = 0.03295898
@@ -778,17 +818,80 @@ res$avg_censoring
 
 
 
-# calibration results (Weibull, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0): 
+# calibration results (Weibull, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0, all beta=0):
+# for the old Bernstein Polynomial approximation: weibull_shape = 0.692, weibull_scale = 13.823,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.08154297, avg_censoring = 0.5001691
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.05224609, avg_censoring = 0.5003527
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90): lambda_c = 0.05224609, avg_censoring = 0.5003527
 # scenario 4 (beta_2 = 0.04, log_AF = -0.90): lambda_c = 0.1289062, avg_censoring = 0.4998873
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90): lambda_c = 0.1289062, avg_censoring = 0.4998873
 
-# calibration results (log-logistic, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0): 
+# 20260427
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.70, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.02832031, avg_censoring = 0.5005309
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.015625, avg_censoring = 0.5001
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.04638672, avg_censoring = 0.4999345
+
+
+# calibration results (log-logistic, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0, all beta=0): 
+# for the old Bernstein Polynomial approximation: loglogistic_shape = 1.75, loglogistic_scale = 12.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.05322266, avg_censoring = 0.5001255
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.03320312, avg_censoring = 0.5007873
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90): lambda_c = 0.03320312, avg_censoring = 0.5007873
 # scenario 4 (beta_2 = 0.04, log_AF = -0.90): lambda_c = 0.08251953, avg_censoring = 0.4998182
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90): lambda_c = 0.08251953, avg_censoring = 0.4998182
 
+# 20260427
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): loglogistic_shape = 1.20, loglogistic_scale = 23.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.02587891, avg_censoring = 0.5007
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.01391602, avg_censoring = 0.5005055
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.04150391, avg_censoring = 0.4992745
+
+
+
+##### check administrative censoring only "aft-only" using 500 seeds #####
+# lambda_c < 0 triggers administrative censoring only:
+#   T_obs = min(T_i, max_FU), status = I(T_i <= max_FU)
+admin_censoring <- avg_censoring_parallel(
+  lambda_c = -1,
+  seeds = 1:500,
+  n_patients = 1100,
+  n_cores = 8,
+  D = matrix(c(0^2, 0, 0, 0^2), 2, 2),
+  beta_0 = 0, beta_1 = 0,
+  beta_2 = 0.00, # scenario 1 0.00, scenario 2 0.04, scenario 3 -0.04, scenario 4 0.04, scenario 5 -0.04
+  sigma_e = 0,
+  log_HR = 0,
+  alpha_PH = 0,
+  log_AF = -0.90, # scenario 1 0.00, scenario 2 0.90, scenario 3 0.90, scenario 4 -0.90, scenario 5 -0.90
+  alpha_AFT = 0, # try no association, aft only
+  # Old Bernstein Polynomial approximation:
+  # weibull_shape = 0.692,
+  # weibull_scale = 13.823,
+  # loglogistic_shape = 1.75,
+  # loglogistic_scale = 12.0,
+  weibull_shape = 0.70,
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
+  visit = c(0, 1, seq(3, 92, 3)),
+  max_FU = 72,
+  aft_mode = "Weibull", # loglogistic or Weibull
+  link_type = "value"
+)
+
+admin_censoring$avg_censoring
+admin_censoring$n_failed
+
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.70, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.2090255
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.32196
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1311945
+
+
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): loglogistic_shape = 1.20, loglogistic_scale = 23.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.2023836
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.3155127
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1409127

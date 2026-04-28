@@ -87,21 +87,28 @@ D <- matrix(c(sigma_0^2, sigma_01, sigma_01, sigma_1^2), 2, 2)
 # Survival model
 
 # Loglogistic parameters
-loglogistic_shape <-  1.75   # Unimodal hazard (peak hazard followed by decline)
-loglogistic_scale <- 12.0    # Survival centered  
+# Old Bernstein Polynomial approximation:
+# loglogistic_shape <- 1.75
+# loglogistic_scale <- 12.0
+loglogistic_shape <- 1.20
+loglogistic_scale <- 23.0
 
 # Baseline and treatment effects on log-hazard scale
 log_baseline_hazard <- 99          # Baseline log-hazard (intercept)
 log_HR <- 99                      # Log hazard ratio for treatment (HR = exp(log_HR))
 
 # Weibull shape parameter (ν): controls time dependence of the hazard
-weibull_shape <- 0.692                 # Shape > 1 ⇒ increasing hazard over time
+# Old Bernstein Polynomial approximation:
+# weibull_shape <- 0.692
+weibull_shape <- 0.70
 
 # Convert baseline log-hazard to hazard rate (λ)
 baseline_hazard_rate <- exp(log_baseline_hazard)  # Used as λ in simsurv
 
 # Convert to Weibull scale parameter for use in rweibull/survreg
-weibull_scale <- 13.823
+# Old Bernstein Polynomial approximation:
+# weibull_scale <- 13.823
+weibull_scale <- 38.0
 
 # Compute acceleration factor (AF) under Weibull interpretation
 log_AF <- -log_HR / weibull_shape
@@ -429,4 +436,3 @@ simulate_joint_dataset <- function(D,
 #   aft_mode =  "loglogistic",  # "PH" or "Weibull" or "loglogistic"
 #   link_type = "value" # "value" or "slope"
 # )
-
