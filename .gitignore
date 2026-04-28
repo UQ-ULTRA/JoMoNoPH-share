@@ -15,3 +15,5 @@ Stan/*
 !Stan/*.stan
 !Stan/*.R
 !Stan/*.slurm
+.positai
+*.zip
