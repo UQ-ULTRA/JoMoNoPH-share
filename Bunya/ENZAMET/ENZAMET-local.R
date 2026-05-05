@@ -250,12 +250,12 @@ print(summary(fit_jmb2))
 ### Model 3: BP (Bernstein Polynomial baseline hazard)
 
 res_bp <- fit_stan_model(
-  stan_file     = here("Stan", "Bernstein-Polynomials-JM-Hist.stan"),
-  stan_data     = stan_data,
-  init_vals     = init_vals,
-  seed          = seed,
-  chains        = chains,
-  iter_warmup   = iter_warmup,
+  stan_file = here("Stan", "Bernstein-Polynomials-JM-Hist.stan"),
+  stan_data = stan_data,
+  init_vals = init_vals,
+  seed = seed,
+  chains = chains,
+  iter_warmup = iter_warmup,
   iter_sampling = iter_sampling
 )
 message(sprintf("BP fitted in %.1f s", res_bp$elapsed))
