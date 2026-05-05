@@ -17,3 +17,4 @@ Stan/*
 !Stan/*.slurm
 .positai
 *.zip
+*.csv
