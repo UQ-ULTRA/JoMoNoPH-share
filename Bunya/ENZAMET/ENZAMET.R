@@ -86,10 +86,6 @@ library(simsurv)
 library(cmdstanr)
 library(R.utils)
 
-library(aftgee) # alternative semiparametric AFT model
-library(smoothSurv) # alternative semiparametric AFT model
-library(rstpm2) # alternative semiparametric AFT model
-
 # Set CmdStan path globally for main session
 set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
 
@@ -114,6 +110,12 @@ k_bases <- 5  # Default, will be overridden
 
 # Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
 joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+
+if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+  library(aftgee) # alternative semiparametric AFT model
+  library(smoothSurv) # alternative semiparametric AFT model
+  library(rstpm2) # alternative semiparametric AFT model
+}
 
 ##########
 
@@ -361,40 +363,65 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     dplyr::rename(time = T_obs)
   
   
-  #### fit alternative semiparametric AFT models (aftgee, aftssr, smoothSurv, rstpm2) ####
-  # least-square-based method (with bootstrap method for variance estimation)
-  fit_aftgee <- tryCatch({
-    aftgee::aftgee(Surv(time, status) ~ arm, data = sim_dat$survival)
-  }, error = function(e) {
-    message("aftgee fit failed: ", e$message)
-    NULL
-  })
-  beta_surv_aftgee = fit_aftgee$coef.res[-1]
-  # rank-based method (with induced smoothing method for variance estimation)
-  fit_aftsrr <- tryCatch({
-    aftgee::aftsrr(Surv(time, status) ~ arm, data = sim_dat$survival, se = "ISMB")
-  }, error = function(e) {
-    message("aftgee fit failed: ", e$message)
-    NULL
-  })
-  beta_surv_aftsrr = fit_aftsrr$beta
-  # Komarek's likelihood-based error distribution smoothing method
-  fit_smoothSurv <- tryCatch({
-    smoothSurv::smoothSurvReg(Surv(time, status) ~ arm, data = sim_dat$survival)
-  }, error = function(e) {
-    message("smoothSurv fit failed: ", e$message)
-    NULL
-  })
-  beta_surv_smoothSurv = fit_smoothSurv$regres[-c(1, NROW(fit_smoothSurv$regres)-1, NROW(fit_smoothSurv$regres)), 1]
-  # Crowther et al. (2022) flexible parametric AFT method
-  fit_rstpm2 <- tryCatch({
-    rstpm2::aft(Surv(time, status) ~ arm, data = sim_dat$survival, df = k_bases)
-  }, error = function(e) {
-    message("rstpm2 fit failed: ", e$message)
-    NULL
-  })
-  # beta_surv_rstpm2 = summary(fit_rstpm2)@coef[-((NROW(summary(fit_rstpm2)@coef)-k_bases+1):NROW(summary(fit_rstpm2)@coef)),1]
-  beta_surv_rstpm2 = fit_rstpm2@coef[-c((length(fit_rstpm2@coef)-4+1):length(fit_rstpm2@coef))]
+  #### fit alternative semiparametric AFT models (aftgee, aftssr, smoothSurv, rstpm2, spsurv) ####
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+    # Weibull parametric AFT model
+    fit_weibull <- tryCatch({
+      survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival, dist = "weibull")
+    }, error = function(e) {
+      message("Weibull AFT fit failed: ", e$message)
+      NULL
+    })
+    beta_surv_weibull = if (is.null(fit_weibull)) NA_real_ else fit_weibull$coefficients[-1]
+    fit_loglogistic <- tryCatch({
+      survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival, dist = "loglogistic")
+    }, error = function(e) {
+      message("Log-logistic AFT fit failed: ", e$message)
+      NULL
+    })
+    beta_surv_loglogistic = if (is.null(fit_loglogistic)) NA_real_ else fit_loglogistic$coefficients[-1]
+    # least-square-based method (with bootstrap method for variance estimation)
+    fit_aftgee <- tryCatch({
+      aftgee::aftgee(Surv(time, status) ~ arm, data = sim_dat$survival)
+    }, error = function(e) {
+      message("aftgee fit failed: ", e$message)
+      NULL
+    })
+    beta_surv_aftgee = if (is.null(fit_aftgee)) NA_real_ else fit_aftgee$coef.res[-1]
+    # rank-based method (with induced smoothing method for variance estimation)
+    fit_aftsrr <- tryCatch({
+      aftgee::aftsrr(Surv(time, status) ~ arm, data = sim_dat$survival, se = "ISMB")
+    }, error = function(e) {
+      message("aftgee fit failed: ", e$message)
+      NULL
+    })
+    beta_surv_aftsrr = if (is.null(fit_aftsrr)) NA_real_ else fit_aftsrr$beta
+    # Komarek's likelihood-based error distribution smoothing method
+    fit_smoothSurv <- tryCatch({
+      smoothSurv::smoothSurvReg(Surv(time, status) ~ arm, data = sim_dat$survival)
+    }, error = function(e) {
+      message("smoothSurv fit failed: ", e$message)
+      NULL
+    })
+    beta_surv_smoothSurv = if (is.null(fit_smoothSurv)) {
+      NA_real_
+    } else {
+      fit_smoothSurv$regres[-c(1, NROW(fit_smoothSurv$regres)-1, NROW(fit_smoothSurv$regres)), 1]
+    }
+    # Crowther et al. (2022) flexible parametric AFT method
+    fit_rstpm2 <- tryCatch({
+      rstpm2::aft(Surv(time, status) ~ arm, data = sim_dat$survival, df = k_bases)
+    }, error = function(e) {
+      message("rstpm2 fit failed: ", e$message)
+      NULL
+    })
+    # beta_surv_rstpm2 = summary(fit_rstpm2)@coef[-((NROW(summary(fit_rstpm2)@coef)-k_bases+1):NROW(summary(fit_rstpm2)@coef)),1]
+    beta_surv_rstpm2 = if (is.null(fit_rstpm2)) {
+      NA_real_
+    } else {
+      fit_rstpm2@coef[-c((length(fit_rstpm2@coef)-k_bases+1):length(fit_rstpm2@coef))]
+    }
+  }
   
   # ------------------------------------------------------------------------------ 
   # Fit survival model on raw variables 
@@ -734,22 +761,28 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     data.frame(elpd_waic = NA, p_waic = NA, waic = NA)
   }
   
-  return(list(
-    censor_prop = mean(sim_dat$survival$status == 0),
-    unique_seed = unique_seed,
-    alt_fit_status = c(
-      aftgee = !is.null(fit_aftgee),
-      aftsrr = !is.null(fit_aftsrr),
-      smoothSurv = !is.null(fit_smoothSurv),
-      rstpm2 = !is.null(fit_rstpm2)
-    ),
-    beta_sAFT = rbind(beta_surv_aftgee, beta_surv_aftsrr, beta_surv_smoothSurv, beta_surv_rstpm2),
-    joint_summary = summ_joint,
-    joint_diagnostics = diag_joint,
-    lme_coefs = coefs,
-    runtimes = runtimes,
-    loo_joint = loo_joint_est,
-    waic_joint = waic_joint_est))
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+    return(list(
+      censor_prop = mean(sim_dat$survival$status == 0),
+      unique_seed = unique_seed,
+      beta_sAFT = rbind(beta_surv_aftgee, beta_surv_aftsrr, beta_surv_smoothSurv, beta_surv_rstpm2, beta_surv_weibull, beta_surv_loglogistic),
+      joint_summary = summ_joint,
+      joint_diagnostics = diag_joint,
+      lme_coefs = coefs,
+      runtimes = runtimes,
+      loo_joint = loo_joint_est,
+      waic_joint = waic_joint_est))
+  } else {
+    return(list(
+      censor_prop = mean(sim_dat$survival$status == 0),
+      unique_seed = unique_seed,
+      joint_summary = summ_joint,
+      joint_diagnostics = diag_joint,
+      lme_coefs = coefs,
+      runtimes = runtimes,
+      loo_joint = loo_joint_est,
+      waic_joint = waic_joint_est))
+  }
 }
 
 ##########
