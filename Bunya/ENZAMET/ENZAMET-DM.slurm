@@ -40,7 +40,7 @@ echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Host: $(hostname)"
 echo "CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "Model: BP_aft_logy Weibull"
+echo "Model: BP_aft Weibull"
 echo "Output directory: $SIM_OUTPUT_DIR"
 echo "SLURM .out directory: $JOB_OUTPUT_DIR"
 

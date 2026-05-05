@@ -122,7 +122,7 @@ baseline_recon_grid_size <- 200
 baseline_recon_draws_max <- 500
 
 # Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
-joint_model_type <- "BP_aft_logy"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
 
 if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
   library(aftgee) # alternative semiparametric AFT model

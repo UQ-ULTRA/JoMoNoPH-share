@@ -48,7 +48,7 @@ rm(list=ls())
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
 # models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
-models_to_plot <- c("BP_aft_logy")
+models_to_plot <- c("BP_aft")
 distributions_to_analyse <- c("Weibull") # use c("Weibull", "loglogistic") to analyse both
 distribution_pattern <- paste(distributions_to_analyse, collapse = "|")
 # =============================================================================
