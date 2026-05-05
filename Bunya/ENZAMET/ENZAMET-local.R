@@ -38,14 +38,14 @@ source(here("Bunya", "Auxiliary", "BP-functions.R"))
 
 # Edit these to change the scenario, sample size, and sampler controls
 
-seed       <- 214214
-scenario   <- 2          # ENZAMET data-gen scenario (1, 2, 4, ...)
+seed <- 214214
+scenario <- 2          # ENZAMET data-gen scenario (1, 2, 4, ...)
 n_patients <- 200        # smaller than ENZAMET full (1100) for local speed
-max_FU     <- 72
-lambda_c   <- 0.03320312 # scenario-2 censoring rate; set 0 for no censoring
-k_bases    <- 5          # Bernstein basis dimension
-chains        <- 4
-iter_warmup   <- 1000
+max_FU <- 72
+lambda_c <- 0.03320312 # scenario-2 censoring rate; set 0 for no censoring
+k_bases <- 5          # Bernstein basis dimension
+chains <- 4
+iter_warmup <- 1000
 iter_sampling <- 1000
 
 ##########
