@@ -93,10 +93,14 @@ functions {
     matrix[n,m] b2;
     matrix[n,m] B2;
     
+    // Vectorised over i for each k: eliminates n×m scalar beta_lpdf calls.
+    // Beta(k, m-k+1) log-density at y = (k-1)*log(y) + (m-k)*log(1-y) - lbeta(k, m-k+1)
+    // beta_cdf does not vectorise in this Stan version, so inner loop retained for B2.
     for (k in 1:m) {
+      real lbeta_k = lbeta(k, m - k + 1);
+      b2[, k] = (k - 1) * log(y_alt) + (m - k) * log1m(y_alt) - lbeta_k;
       for (i in 1:n) {
-        b2[i,k] = beta_lpdf(y_alt[i] | k, (m - k + 1));
-        B2[i,k] = beta_cdf(y_alt[i] | k, (m - k + 1));
+        B2[i, k] = beta_cdf(y_alt[i] | k, m - k + 1);
       }
     }
     
