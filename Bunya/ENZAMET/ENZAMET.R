@@ -37,6 +37,7 @@
 # - GB: Gaussian Basis baseline hazard (joint model)
 # - GB_Quantile: Gaussian Basis with quantile-based knots (joint model)
 # - GP: Gaussian Process baseline hazard (joint model)
+# - BP_Penalty: Bernstein Polynomial baseline hazard with second-order difference penalty (joint model)
 # - BP_aft_alt: AFT model only, Bernstein Polynomials with ordered parameters, no roughness penalty
 # - GB_aft: AFT model only, Gaussian Basis, no roughness penalty
 # - GB_aft_logy: AFT model only, Gaussian Basis on log(y), no roughness penalty
@@ -85,6 +86,7 @@ library(furrr)
 library(simsurv)
 library(cmdstanr)
 library(R.utils)
+library(JMbayes2)
 
 # Set CmdStan path globally for main session
 set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
@@ -108,8 +110,8 @@ cpus_per_sim <- chains * threads_per_chain
 # Will be set from config_grid during execution
 k_bases <- 5  # Default, will be overridden
 
-# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
-joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+# Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_Penalty" (BP with difference penalty), "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
+joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_Penalty", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
 
 if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
   library(aftgee) # alternative semiparametric AFT model
@@ -433,7 +435,42 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     x = TRUE
   )
   
-  # Prepare data for joint model (BP, GB, GB_Quantile, GP, BP_aft_alt, GB_aft, GB_aft_logy, GB_aft_logy_adaptive, or BP_aft)
+  # ------------------------------------------------------------------------------
+  # Fit JMbayes2 Cox PH joint model (comparison; non-AFT-only models only)
+  # ------------------------------------------------------------------------------
+  fit_jmb2     <- NULL
+  t_jmb2_elapsed <- 0
+  summ_jmb2    <- NULL
+
+  if (!joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive") &&
+      !is.null(fit_long)) {
+    fit_cox_jmb2 <- tryCatch(
+      survival::coxph(Surv(time, status) ~ arm, data = sim_dat$survival, x = TRUE),
+      error = function(e) { message("Cox PH (JMbayes2) fit failed: ", e$message); NULL }
+    )
+    if (!is.null(fit_cox_jmb2)) {
+      t_jmb2_start <- Sys.time()
+      fit_jmb2 <- tryCatch(
+        suppressMessages(
+          JMbayes2::jm(fit_cox_jmb2, list(fit_long), time_var = "time",
+                       n_iter = 3500L, n_burnin = 500L, n_chains = 3L)
+        ),
+        error = function(e) { message("JMbayes2 fit failed: ", e$message); NULL }
+      )
+      t_jmb2_elapsed <- as.numeric(difftime(Sys.time(), t_jmb2_start, units = "secs"))
+      if (!is.null(fit_jmb2)) {
+        s_jmb2    <- summary(fit_jmb2)
+        summ_jmb2 <- list(
+          survival     = as.data.frame(s_jmb2$Survival),
+          longitudinal = as.data.frame(s_jmb2$Longitudinal[[1]]),
+          association  = as.data.frame(s_jmb2$Associations),
+          sim_id       = i
+        )
+      }
+    }
+  }
+
+  # Prepare data for joint model (BP, GB, GB_Quantile, GP, BP_Penalty, BP_aft_alt, GB_aft, GB_aft_logy, GB_aft_logy_adaptive, or BP_aft)
   if (joint_model_type == "BP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist.stan"
     # stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-DM.stan"  # 20260129
@@ -451,10 +488,12 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Basis-logy-adaptive-grid.stan"
   } else if (joint_model_type == "GP") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Gaussian-Process-JM-Hist.stan"
+  } else if (joint_model_type == "BP_Penalty") {
+    stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-Penalty.stan"
   } else if (joint_model_type == "BP_aft") {
     stan_model_file_joint <- "~/JoMoNoPH-share/Stan/Bernstein-Polynomials.stan"
   } else {
-    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_aft_alt', 'GB_aft', 'GB_aft_logy', 'GB_aft_logy_adaptive', or 'BP_aft'.", joint_model_type))
+    stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_Penalty', 'BP_aft_alt', 'GB_aft', 'GB_aft_logy', 'GB_aft_logy_adaptive', or 'BP_aft'.", joint_model_type))
   }
   
   if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
@@ -735,9 +774,10 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     joint_model = joint_model_type,
     k_bases = k_bases,
     lme_time = t_lme_elapsed,
+    jmb2_time = t_jmb2_elapsed,
     joint_compile_time = t_compile_joint_elapsed,
     joint_stan_time = t_stan_joint_elapsed,
-    total_time = t_lme_elapsed + t_compile_joint_elapsed + t_stan_joint_elapsed
+    total_time = t_lme_elapsed + t_jmb2_elapsed + t_compile_joint_elapsed + t_stan_joint_elapsed
   )
   
   # Extract LOO/WAIC estimates if available
@@ -768,6 +808,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       beta_sAFT = rbind(beta_surv_aftgee, beta_surv_aftsrr, beta_surv_smoothSurv, beta_surv_rstpm2, beta_surv_weibull, beta_surv_loglogistic),
       joint_summary = summ_joint,
       joint_diagnostics = diag_joint,
+      jmb2_summary = summ_jmb2,
       lme_coefs = coefs,
       runtimes = runtimes,
       loo_joint = loo_joint_est,
@@ -778,6 +819,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       unique_seed = unique_seed,
       joint_summary = summ_joint,
       joint_diagnostics = diag_joint,
+      jmb2_summary = summ_jmb2,
       lme_coefs = coefs,
       runtimes = runtimes,
       loo_joint = loo_joint_est,
