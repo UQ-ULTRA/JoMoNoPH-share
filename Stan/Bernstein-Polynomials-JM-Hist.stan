@@ -93,10 +93,14 @@ functions {
     matrix[n,m] b2;
     matrix[n,m] B2;
     
+    // Vectorised over i for each k: eliminates n×m scalar beta_lpdf calls.
+    // Beta(k, m-k+1) log-density at y = (k-1)*log(y) + (m-k)*log(1-y) - lbeta(k, m-k+1)
+    // beta_cdf does not vectorise in this Stan version, so inner loop retained for B2.
     for (k in 1:m) {
+      real lbeta_k = lbeta(k, m - k + 1);
+      b2[, k] = (k - 1) * log(y_alt) + (m - k) * log1m(y_alt) - lbeta_k;
       for (i in 1:n) {
-        b2[i,k] = beta_lpdf(y_alt[i] | k, (m - k + 1));
-        B2[i,k] = beta_cdf(y_alt[i] | k, (m - k + 1));
+        B2[i, k] = beta_cdf(y_alt[i] | k, m - k + 1);
       }
     }
     
@@ -153,38 +157,6 @@ data {
   //// linking data
   array[n] int<lower=1> J_1_unique;
   matrix[n, K_long] X_long_surv;
-}
-
-// transformed data
-transformed data {
-  // ---- R-TH DIFFERENCE PENALTY MATRIX ----
-  // Build the r-th difference penalty matrix Delta_r
-  int n_diff = m - r;  // number of r-th differences
-  matrix[n_diff, m] Delta_r = rep_matrix(0, n_diff, m);
-  
-  // Fill the difference matrix
-  for (i in 1:n_diff) {
-    // Compute binomial coefficients for r-th difference
-    for (j in 0:r) {
-      int sign = (j % 2 == 0) ? 1 : -1;
-      real binom_coef = 1;
-      
-      // Compute binomial coefficient C(r,j)
-      if (j > 0) {
-        for (k in 1:j) {
-          binom_coef *= (r - k + 1) * 1.0 / k;
-        }
-      }
-      
-      Delta_r[i, i + j] = sign * binom_coef;
-    }
-  }
-  
-  // Compute Delta_r^T * Delta_r for the quadratic penalty
-  matrix[m, m] penalty_matrix = Delta_r' * Delta_r;
-  
-  // Compute rank of penalty matrix (number of non-zero eigenvalues)
-  int rho = n_diff;  // For r-th differences, rank is typically m-r
 }
 
 // Parameters
@@ -255,10 +227,6 @@ model {
   beta_surv ~ normal(beta_surv_prior_mean, beta_surv_prior_scale);
   alpha_tilde ~ normal(0, alpha_tilde_sd);
   
-  // Penalized spline coefficients with r-th difference penalty
-  // This implements: p(γ_h0 | τ_h) ∝ τ_h^(ρ/2) * exp(-τ_h/2 * γ_h0^T * Δ_r^T * Δ_r * γ_h0)
-  target += 0.5 * rho * log(tau_h);  // Normalization constant τ_h^(ρ/2)
-  target += -0.5 * tau_h * quad_form(penalty_matrix, gamma);  // Quadratic penalty
   gamma ~ normal(0, 5) T[0, ];  // Keep base prior for positivity constraint
 
   // survival likelihood
