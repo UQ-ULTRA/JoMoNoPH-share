@@ -13,10 +13,11 @@
 # 3. Main processing function for simulation aggregation
 # 4. Cross-configuration analysis and summary tables
 # 5. Data preparation for visualization
-# 6. Figure generation (loglogistic hazards)
+# 6. Figure generation (Weibull/loglogistic hazards)
 #
 # OUTPUTS:
 # - Combined summary tables (Stan estimates by scenario)
+# - Alternative AFT method summaries for AFT-only runs
 # - Boxplots of posterior means by configuration and scenario
 # - R-hat convergence diagnostics
 # - Baseline hazard reconstruction plots
@@ -47,7 +48,9 @@ rm(list=ls())
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
 # models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
-models_to_plot <- c("BP_aft")
+models_to_plot <- c("BP_aft_logy")
+distributions_to_analyse <- c("Weibull") # use c("Weibull", "loglogistic") to analyse both
+distribution_pattern <- paste(distributions_to_analyse, collapse = "|")
 # =============================================================================
 
 aft_only_models <- c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")
@@ -69,12 +72,44 @@ if (has_aft_only_models && !all_models_are_aft_only) {
 ##########
 
 bunya <- FALSE
+analysis_output_dir <- "" # Set manually to pin one run; empty means use newest output_* folder.
+
+find_latest_output_dir <- function(base_dir) {
+  output_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)
+  output_dirs <- output_dirs[stringr::str_detect(
+    basename(output_dirs),
+    "^output_[0-9]{8}_[A-Za-z0-9._-]+$"
+  )]
+
+  if (length(output_dirs) == 0) {
+    stop("No output_yyyymmdd_jobID folders found under: ", base_dir)
+  }
+
+  output_dirs[which.max(file.info(output_dirs)$mtime)]
+}
 
 if (bunya==TRUE) {
-  out_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "output_20260428_24052266")
+  base_output_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET")
+  fig_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "figures")
+  summary_dir <- here::here("JoMoNoPH-share", "Bunya", "ENZAMET", "summary_tables")
 } else {
-  out_dir <- here::here("Bunya", "ENZAMET", "output_20260428_24052266")
+  base_output_dir <- here::here("Bunya", "ENZAMET")
+  fig_dir <- here::here("Bunya", "ENZAMET", "figures")
+  summary_dir <- here::here("Bunya", "ENZAMET", "summary_tables")
 }
+
+out_dir <- if (nzchar(analysis_output_dir)) {
+  analysis_output_dir
+} else if (nzchar(Sys.getenv("SIM_OUTPUT_DIR", unset = ""))) {
+  Sys.getenv("SIM_OUTPUT_DIR")
+} else {
+  find_latest_output_dir(base_output_dir)
+}
+out_dir <- path.expand(out_dir)
+message("Using simulation output directory: ", out_dir)
+
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+if (!dir.exists(summary_dir)) dir.create(summary_dir, recursive = TRUE)
 
 # out_dir <- "C:/Users/uqamar43/OneDrive - The University of Queensland/02 shared HERA ULTRA/04 Stat Methods/08 JoMoNoPH/Biometrical-Journal/Sim-Results"
 
@@ -125,10 +160,15 @@ shorten_config <- function(cfg) {
   k    <- parts[3]
   n    <- parts[4]
   cens <- parts[5]
-  dist_letter <- toupper(substr(parts[6], 1, 1))  # "L" for loglogistic
+  dist <- parts[6]
+  dist_short <- dplyr::case_when(
+    tolower(dist) == "weibull" ~ "W",
+    tolower(dist) == "loglogistic" ~ "LL",
+    TRUE ~ dist
+  )
   scen <- parts[7]
   
-  paste0(bf, " k=", k, ", c=", format_cens_short(cens), ", S", scen)
+  paste0(bf, " k=", k, ", c=", format_cens_short(cens), ", d=", dist_short, ", S", scen)
 }
 
 
@@ -151,12 +191,13 @@ parse_config <- function(config_str) {
 }
 
 parse_short_config <- function(lbl) {
-  m <- stringr::str_match(lbl, "^([A-Za-z_]+)\\s+k=(\\d+),\\s+c=([A-Za-z0-9]+)%?,\\s+S(\\d+)$")
+  m <- stringr::str_match(lbl, "^([A-Za-z_]+)\\s+k=(\\d+),\\s+c=([A-Za-z0-9]+)%?(?:,\\s+d=([A-Za-z]+))?,\\s+S(\\d+)$")
   if (is.na(m[1,1])) {
     return(tibble::tibble(
       bf = NA_character_,
       k_bases = NA_real_,
       cens = NA_character_,
+      dist = NA_character_,
       scenario = NA_real_
     ))
   }
@@ -164,7 +205,8 @@ parse_short_config <- function(lbl) {
     bf       = m[1,2],
     k_bases  = as.numeric(m[1,3]),
     cens     = m[1,4],
-    scenario = as.numeric(m[1,5])
+    dist     = m[1,5],
+    scenario = as.numeric(m[1,6])
   )
 }
 
@@ -269,6 +311,7 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
           values_to = "estimate"
         ) %>%
         mutate(
+          parameter = dplyr::if_else(parameter == "arm", "beta_surv[1]", parameter),
           sim_id = idx
         )
     })
@@ -283,10 +326,13 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
         group_by(method, parameter) %>%
         summarise(
           Mean     = mean(estimate, na.rm = TRUE),
+          Median   = median(estimate, na.rm = TRUE),
+          Q2.5     = stats::quantile(estimate, 0.025, na.rm = TRUE),
+          Q97.5    = stats::quantile(estimate, 0.975, na.rm = TRUE),
           SD       = sd(estimate, na.rm = TRUE),
           Bias     = mean(bias, na.rm = TRUE),
           RMSE     = sqrt(mean(bias^2, na.rm = TRUE)),
-          n_sims   = n(),
+          n_sims   = sum(!is.na(estimate)),
           .groups  = "drop"
         ) %>%
         mutate(Source = "AFT (frequentist)")
@@ -464,6 +510,12 @@ filenames <- list.files(out_dir, pattern = "\\.[rR][dD][sS]$")
 configs <- substr(tools::file_path_sans_ext(filenames),
                   1, nchar(tools::file_path_sans_ext(filenames)) - 9) %>%
   unique()
+configs <- configs[
+  purrr::map_lgl(configs, function(cfg) {
+    cfg_parsed <- parse_config(cfg)
+    !is.null(cfg_parsed) && cfg_parsed$dist %in% distributions_to_analyse
+  })
+]
 
 # # Get all unique config stubs from BP files only (strip last 9 chars before .rds)
 # filenames <- list.files(
@@ -500,6 +552,24 @@ results_by_config <- purrr::compact(
     })
 )
 
+config_info_full <- if (length(results_by_config) > 0) {
+  tibble::tibble(config = names(results_by_config)) %>%
+    dplyr::mutate(parsed = purrr::map(config, parse_config)) %>%
+    tidyr::unnest_wider(parsed)
+} else {
+  tibble::tibble(config = character(), bf = character(), k_bases = numeric(),
+                 n = numeric(), cens = character(), dist = character(),
+                 scenario = numeric(), fu = character())
+}
+config_info <- config_info_full
+
+analysis_dist_title <- paste(sort(unique(config_info_full$dist)), collapse = "/")
+analysis_dist_file <- tolower(gsub("[^A-Za-z0-9]+", "_", analysis_dist_title))
+if (!nzchar(analysis_dist_file)) {
+  analysis_dist_file <- "all"
+  analysis_dist_title <- "All distributions"
+}
+
 
 # ---- Combine diagnostic summaries across configs
 all_diag_summary <- purrr::map2_dfr(
@@ -508,6 +578,9 @@ all_diag_summary <- purrr::map2_dfr(
   ~ dplyr::mutate(.x$diag_summary, config = .y)
 )
 all_diag_summary
+# mean_n_rhat_gt_1_01 column: mean number of r_hat's greater than 1.01
+# mean_n_rhat_gt_1_05 column: mean number of r_hat's greater than 1.05
+
 # diagnostic plot: boxplot of max R-hat per config
 # long form, useful for boxplots of max_rhat or realised censoring
 all_diag_per_sim <- purrr::map2_dfr(
@@ -568,8 +641,11 @@ print(all_summary_tables, n = nrow(all_summary_tables))
 # Wider view (mean/sd columns per config)
 if (nrow(all_summary_tables) > 0 && any(c("mean", "sd") %in% colnames(all_summary_tables))) {
   summary_wide <- all_summary_tables %>%
-    # Filter to only include BP and loglogistic
-    dplyr::filter(stringr::str_detect(config, "^BP_") & stringr::str_detect(config, "_loglogistic_")) %>%
+    # Filter to selected BP configurations and the distribution(s) requested above.
+    dplyr::filter(
+      stringr::str_detect(config, "^BP_"),
+      stringr::str_detect(config, paste0("_(", distribution_pattern, ")_"))
+    ) %>%
     tidyr::pivot_longer(cols = dplyr::any_of(c("mean", "sd")), names_to = "stat", values_to = "value") %>%
     tidyr::unite("config_stat", config, stat) %>%
     tidyr::pivot_wider(names_from = config_stat, values_from = value)
@@ -607,10 +683,8 @@ key_vars <- c("alpha", "beta_long[1]", "beta_long[2]", "beta_long[3]", "beta_sur
 
 if (nrow(all_summary_tables) > 0) {
   # Attach true values
-  # First get config info to determine scenario
-  config_info <- tibble::tibble(config = names(results_by_config)) %>%
-    dplyr::mutate(parsed = purrr::map(config, parse_config)) %>%
-    tidyr::unnest_wider(parsed)   # bf, n, cens, dist, scenario, fu
+  # Use full config metadata to determine scenario and distribution.
+  config_info <- config_info_full   # bf, n, cens, dist, scenario, fu
   
   results_tab <- all_summary_tables %>%
     dplyr::left_join(config_info, by = "config") %>%
@@ -830,7 +904,34 @@ if (nrow(all_summary_tables) > 0) {
 } # end if (nrow(all_summary_tables) > 0)
 
 # ---- Combine sAFT beta_surv across configurations
+all_beta_saft_raw <- tibble::tibble()
+all_beta_saft_summary <- tibble::tibble()
+aft_tab <- tibble::tibble()
+
 if (has_aft_only_models) {
+  all_beta_saft_raw <- purrr::map2(
+    results_by_config,
+    names(results_by_config),
+    ~ {
+      if (is.null(.x$beta_saft_raw) || nrow(.x$beta_saft_raw) == 0) {
+        return(NULL)
+      }
+      dplyr::mutate(.x$beta_saft_raw, config = .y)
+    }
+  ) %>%
+    purrr::compact() %>%
+    dplyr::bind_rows()
+
+  if (nrow(all_beta_saft_raw) > 0) {
+    all_beta_saft_raw <- all_beta_saft_raw %>%
+      dplyr::left_join(config_info, by = "config")
+
+    readr::write_csv(
+      all_beta_saft_raw,
+      file.path(summary_dir, paste0("alternative_aft_beta_surv_per_sim_", analysis_dist_file, ".csv"))
+    )
+  }
+
   all_beta_saft_summary <- purrr::map2(
     results_by_config,
     names(results_by_config),
@@ -846,7 +947,7 @@ if (has_aft_only_models) {
   
   if (nrow(all_beta_saft_summary) > 0) {
     all_beta_saft_summary <- all_beta_saft_summary %>%
-      left_join(config_info, by = "config")
+      dplyr::left_join(config_info, by = "config")
   
     # produce a publication-ready table of sAFT beta_surv estimates by scenario
     aft_tab <- all_beta_saft_summary %>%
@@ -870,12 +971,24 @@ if (has_aft_only_models) {
         Method,
         Truth = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario],
         Mean,
+        Median,
+        Q2.5,
+        Q97.5,
         Bias,
         SD,
         RMSE,
         n_sims
       ) %>%
       arrange(Parameter, Basis, k, n, Cens, Dist, Scenario, Method)
+
+    readr::write_csv(
+      aft_tab,
+      file.path(summary_dir, paste0("alternative_aft_beta_surv_summary_", analysis_dist_file, ".csv"))
+    )
+    saveRDS(
+      aft_tab,
+      file.path(summary_dir, paste0("alternative_aft_beta_surv_summary_", analysis_dist_file, ".rds"))
+    )
   
     aft_ft <- aft_tab %>%
       mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
@@ -883,6 +996,10 @@ if (has_aft_only_models) {
       flextable::autofit()
   
     print(aft_ft)
+    message(
+      "Saved alternative AFT beta_surv summaries to: ",
+      file.path(summary_dir, paste0("alternative_aft_beta_surv_summary_", analysis_dist_file, ".csv"))
+    )
   } else {
     message("No beta_sAFT summaries found for selected AFT-only models.")
   }
@@ -908,7 +1025,7 @@ if (nrow(all_filtered_data) > 0) {
   desired_order <- tibble::tibble(config = unique(all_filtered_data$config)) %>%
     dplyr::mutate(parsed = purrr::map(config, parse_short_config)) %>%
     tidyr::unnest(parsed) %>%
-    dplyr::arrange(cens, scenario, k_bases, bf) %>%
+    dplyr::arrange(dist, cens, scenario, k_bases, bf) %>%
     dplyr::pull(config)
   
   all_filtered_data$config <- factor(all_filtered_data$config, levels = desired_order)
@@ -968,13 +1085,13 @@ if (nrow(all_filtered_data) > 0) {
   var_order <- reference_lines$variable
   
   
-  #### Loglogistic distribution figures (ENZAMET only uses loglogistic) ####
+  #### Distribution-specific figures ####
   
-  message("Generating loglogistic figures for ENZAMET scenarios...")
+  message("Generating ", analysis_dist_title, " figures for ENZAMET scenarios...")
   message("Total rows in all_filtered_data: ", nrow(all_filtered_data))
   message("Unique configs:\n", paste(unique(all_filtered_data$config), collapse = "\n"))
   
-  fig_1L <- all_filtered_data %>%
+  fig_1 <- all_filtered_data %>%
     dplyr::filter(!grepl("gamma\\[", variable), !grepl("f_gp\\[", variable), !grepl("^gp_", variable)) %>%
     dplyr::filter(variable %in% var_order) %>%  # Only include variables in reference lines
     dplyr::mutate(variable = factor(variable, levels = var_order)) %>%  # enforce order
@@ -1003,11 +1120,10 @@ if (nrow(all_filtered_data) > 0) {
     ggplot2::labs(
       x = "Configuration",
       y = "Posterior Mean",
-      # title = "Posterior Means - ENZAMET (Loglogistic Hazard, 7 Scenarios, 0%/50% Censoring)"
-      title = "Posterior Means - ENZAMET (5 Scenarios, 0%/50% Censoring)"
+      title = paste0("Posterior Means - ENZAMET (", analysis_dist_title, ", 5 Scenarios, 0%/50%/Admin Censoring)")
     )
   
-  print(fig_1L)
+  print(fig_1)
   
   # Save figures to figures directory
   ##########
@@ -1026,11 +1142,12 @@ if (nrow(all_filtered_data) > 0) {
     message("Created directory: ", fig_dir)
   }
   
-  # Save ENZAMET loglogistic plot
-  ggplot2::ggsave(filename = file.path(fig_dir, "fig_ENZAMET_loglogistic.pdf"),
-                  plot = fig_1L, width = 18, height = 10, units = "in")
+  # Save ENZAMET posterior mean plot
+  fig_filename <- paste0("fig_ENZAMET_", analysis_dist_file, ".pdf")
+  ggplot2::ggsave(filename = file.path(fig_dir, fig_filename),
+                  plot = fig_1, width = 18, height = 10, units = "in")
   
-  message("✓ Saved ENZAMET figure to: ", fig_dir, "\n  - fig_ENZAMET_loglogistic.pdf")
+  message("✓ Saved ENZAMET figure to: ", fig_dir, "\n  - ", fig_filename)
 } else {
   message("No data available for figure generation")
 }
@@ -1056,13 +1173,13 @@ all_configs <- substr(tools::file_path_sans_ext(all_rds_files),
   unique()
 
 # Filter for selected models with k_bases to plot baseline hazards
-# ENZAMET: n=1100, numeric/admin censoring labels, loglogistic, FU72, scenarios 1-5 ONLY
+# ENZAMET: n=1100, numeric/admin censoring labels, Weibull/loglogistic, FU72, scenarios 1-5 ONLY
 # Use the models_to_plot vector defined at the top of the script
 baseline_models_to_plot <- intersect(models_to_plot, baseline_supported_models)
 configs_to_plot <- character(0)
 
 if (length(baseline_models_to_plot) > 0) {
-  models_pattern <- paste0("^(", paste(baseline_models_to_plot, collapse = "|"), ")_k[579]_n1100_cens(\\d+|admin)_loglogistic_scen[1-5]_FU72$")
+  models_pattern <- paste0("^(", paste(baseline_models_to_plot, collapse = "|"), ")_k[579]_n1100_cens(\\d+|admin)_(", distribution_pattern, ")_scen[1-5]_FU72$")
   configs_to_plot <- all_configs[grepl(models_pattern, all_configs)]
 }
 
@@ -1079,6 +1196,7 @@ message("Focusing on scenarios 1-5 only")
 
 # List to store all cumulative hazard plots for compilation
 all_cumhaz_plots <- list()
+baseline_recon_status <- tibble::tibble()
 
 for (config in configs_to_plot) {
   
@@ -1120,6 +1238,23 @@ for (config in configs_to_plot) {
   model_type <- sims[[1]]$joint_summary$model[1]
   message("  Model type from data: ", model_type)
   message("  Found ", length(sims), " simulations; averaging all saved baseline curves and showing up to ", n_sims_to_plot, " replicate curves")
+
+  n_with_baseline_recon <- sum(vapply(
+    sims,
+    function(sim) !is.null(sim$baseline_recon) && !is.null(sim$baseline_recon$curve),
+    logical(1)
+  ))
+
+  baseline_recon_status <- dplyr::bind_rows(
+    baseline_recon_status,
+    tibble::tibble(
+      config = config,
+      n_batch_files = length(rds_files),
+      n_sims = length(sims),
+      n_with_baseline_recon = n_with_baseline_recon,
+      can_plot_cumhaz = n_with_baseline_recon > 0
+    )
+  )
 
   if (!model_type %in% baseline_supported_models) {
     message("Skipping cumulative baseline hazard plot for unsupported AFT-only baseline_recon model type: ", model_type)
@@ -1263,6 +1398,12 @@ for (config in configs_to_plot) {
   message("  ✓ Cumulative baseline hazard plot created and saved from saved baseline_recon: ", fig_name_cumhaz)
 }
 
+if (nrow(baseline_recon_status) > 0) {
+  baseline_status_file <- file.path(summary_dir, paste0("baseline_recon_status_", analysis_dist_file, ".csv"))
+  readr::write_csv(baseline_recon_status, baseline_status_file)
+  message("Saved baseline reconstruction status to: ", baseline_status_file)
+}
+
 # Compile all cumulative hazard plots into a single PDF
 if (length(all_cumhaz_plots) > 0) {
   message("\n=== Compiling all cumulative baseline hazard plots into single PDF ===")
@@ -1272,7 +1413,7 @@ if (length(all_cumhaz_plots) > 0) {
   combined_cumhaz <- patchwork::wrap_plots(all_cumhaz_plots, ncol = 2)
   
   # Save combined PDF
-  combined_filename <- file.path(fig_dir, "fig_cumhaz_ALL_scenarios_1_5.pdf")
+  combined_filename <- file.path(fig_dir, paste0("fig_cumhaz_", analysis_dist_file, "_ALL_scenarios_1_5.pdf"))
   ggplot2::ggsave(
     filename = combined_filename,
     plot = combined_cumhaz,
@@ -1282,7 +1423,7 @@ if (length(all_cumhaz_plots) > 0) {
     limitsize = FALSE
   )
   
-  message("  ✓ Combined cumulative baseline hazard plot saved: fig_cumhaz_ALL_scenarios_1_5.pdf")
+  message("  ✓ Combined cumulative baseline hazard plot saved: ", basename(combined_filename))
   message("  ✓ Total plots included: ", length(all_cumhaz_plots))
 } else {
   message("\n=== No cumulative baseline hazard plots generated ===")
@@ -1432,6 +1573,7 @@ perf_sim <- all_filtered_data %>%
     # Use manuscript-friendly labels for facets
     Parameter = factor(variable, levels = key_vars, labels = unname(param_labels[key_vars])),
     
+    Dist      = factor(dist),
     Scenario  = factor(scenario),
     Cens      = factor(format_cens_table(cens)),
     k         = factor(k_bases)
@@ -1439,8 +1581,8 @@ perf_sim <- all_filtered_data %>%
 
 # Sanity checks
 counts <- perf_sim %>%
-  count(Parameter, Scenario, Cens, k) %>%
-  arrange(Parameter, Cens, Scenario, k)
+  count(Parameter, Dist, Scenario, Cens, k) %>%
+  arrange(Parameter, Dist, Cens, Scenario, k)
 print(counts)
 
 if (nrow(perf_sim) == 0) {
@@ -1450,14 +1592,14 @@ if (nrow(perf_sim) == 0) {
 # Optional diagnostic: check beta_0 (intercept) centering
 beta0_check <- perf_sim %>%
   dplyr::filter(as.character(Parameter) == "beta[0]") %>%
-  group_by(Cens, Scenario, k) %>%
+  group_by(Dist, Cens, Scenario, k) %>%
   summarise(
     mean_of_means   = mean(mean),
     sd_of_means     = sd(mean),
     median_abs_err  = median(abs_err),
     .groups = "drop"
   ) %>%
-  arrange(Cens, Scenario, k)
+  arrange(Dist, Cens, Scenario, k)
 print(beta0_check)
 
 # ------------------------------------------------------------
@@ -1477,7 +1619,7 @@ p_bias <- ggplot(perf_sim, aes(x = Scenario, y = bias)) +
   labs(
     x = "Scenario",
     y = "Bias (posterior mean − truth)",
-    title = "Bias distributions across simulations (scenarios 1–5), by censoring"
+    title = paste0("Bias distributions across simulations (", analysis_dist_title, ", scenarios 1–5), by censoring")
   )
 
 # Absolute error distribution (NOT RMSE)
@@ -1488,7 +1630,7 @@ p_abserr <- ggplot(perf_sim, aes(x = Scenario, y = abs_err)) +
   labs(
     x = "Scenario",
     y = "Absolute error |posterior mean − truth|",
-    title = "Absolute error distributions across simulations (scenarios 1–5), by censoring"
+    title = paste0("Absolute error distributions across simulations (", analysis_dist_title, ", scenarios 1–5), by censoring")
   )
 
 # True RMSE is a group summary (one value per Scenario × Cens × Parameter × k)
@@ -1506,7 +1648,7 @@ p_rmse <- ggplot(rmse_sum, aes(x = Scenario, y = rmse, group = k)) +
   labs(
     x = "Scenario",
     y = "RMSE across simulations",
-    title = "RMSE (summary) by scenario (scenarios 1–5), by censoring"
+    title = paste0("RMSE (summary) by scenario (", analysis_dist_title, ", scenarios 1–5), by censoring")
   )
 
 # Coverage summary + CI (binomial normal approx)
@@ -1534,7 +1676,7 @@ p_cov <- ggplot(cov_sum, aes(x = Scenario, y = coverage, group = k)) +
   labs(
     x = "Scenario",
     y = "Coverage (mean ± 1.96×SE)",
-    title = "Coverage across simulations (scenarios 1–5), by censoring"
+    title = paste0("Coverage across simulations (", analysis_dist_title, ", scenarios 1–5), by censoring")
   )
 
 # ------------------------------------------------------------
@@ -1543,26 +1685,14 @@ p_cov <- ggplot(cov_sum, aes(x = Scenario, y = coverage, group = k)) +
 out_dir <- here("Bunya/ENZAMET/figures/performance")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
-ggsave(file.path(out_dir, "bias_distributions_scen1_5.png"),    p_bias,   width = 14, height = 8, dpi = 300)
-ggsave(file.path(out_dir, "abs_error_distributions_scen1_5.png"), p_abserr, width = 14, height = 8, dpi = 300)
-ggsave(file.path(out_dir, "rmse_summary_scen1_5.png"),         p_rmse,   width = 14, height = 8, dpi = 300)
-ggsave(file.path(out_dir, "coverage_scen1_5.png"),             p_cov,    width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_dir, paste0("bias_distributions_", analysis_dist_file, "_scen1_5.png")),     p_bias,   width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_dir, paste0("abs_error_distributions_", analysis_dist_file, "_scen1_5.png")), p_abserr, width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_dir, paste0("rmse_summary_", analysis_dist_file, "_scen1_5.png")),           p_rmse,   width = 14, height = 8, dpi = 300)
+ggsave(file.path(out_dir, paste0("coverage_", analysis_dist_file, "_scen1_5.png")),               p_cov,    width = 14, height = 8, dpi = 300)
 
 message("Saved plots to: ", out_dir)
 
 # ============================================================
-# OPTIONAL (RECOMMENDED) — avoid mixing distributions
-# If you can rebuild all_filtered_data, keep config_full as well:
-#
-# all_filtered_data <- purrr::map2(
-#   results_by_config, names(results_by_config),
-#   ~ dplyr::mutate(
-#       .x$filtered_data,
-#       config_full = .y,
-#       config      = shorten_config(.y)
-#     )
-# ) %>% purrr::list_rbind()
-#
-# Then parse dist from config_full using parse_config(), and filter:
-#   filter(dist == "loglogistic")
+# The short config labels now include d=W/d=LL so Weibull and log-logistic
+# summaries are not accidentally merged when both are analysed together.
 # ============================================================

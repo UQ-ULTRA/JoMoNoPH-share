@@ -5,14 +5,24 @@
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=20
 ## change to 40 for larger simulation
-#SBATCH --array=1-100
-#SBATCH --mem=20GB
+#SBATCH --array=1-90
+#SBATCH --mem=10GB
 ## change to 40GB for larger simulation
-#SBATCH --time=1:00:00
+#SBATCH --time=01:00:00
 ## change to 8 for larger simulation
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr
+##SBATCH --reservation=ding_diag
 #SBATCH --job-name=ENZAMET
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
+
+export JOB_OUTPUT_DATE="$(date +%Y%m%d)"
+export JOB_OUTPUT_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
+export JOB_OUTPUT_DIR="$HOME/out_${JOB_OUTPUT_DATE}_${JOB_OUTPUT_ID}"
+export JOB_OUTPUT_TASK_SUFFIX="${SLURM_ARRAY_TASK_ID:+_${SLURM_ARRAY_TASK_ID}}"
+mkdir -p "$JOB_OUTPUT_DIR"
+exec > "$JOB_OUTPUT_DIR/${SLURM_JOB_NAME}_${JOB_OUTPUT_ID}${JOB_OUTPUT_TASK_SUFFIX}.out" 2>&1
 
 module purge
 module load r/4.4.0-gfbf-2023a 
@@ -20,11 +30,18 @@ module load r/4.4.0-gfbf-2023a
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
+export SIM_OUTPUT_DATE="$JOB_OUTPUT_DATE"
+export SIM_OUTPUT_JOB_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
+export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output_${SIM_OUTPUT_DATE}_${SIM_OUTPUT_JOB_ID}"
+mkdir -p "$SIM_OUTPUT_DIR"
 
 echo "SLURM Job ID: $SLURM_JOB_ID"
+echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Host: $(hostname)"
 echo "CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "Model: BP/GB + LMM comparison"
+echo "Model: BP_aft_logy Weibull"
+echo "Output directory: $SIM_OUTPUT_DIR"
+echo "SLURM .out directory: $JOB_OUTPUT_DIR"
 
 srun --cpu-bind=cores Rscript ~/JoMoNoPH-share/Bunya/ENZAMET/ENZAMET-DM.R

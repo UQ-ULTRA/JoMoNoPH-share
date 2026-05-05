@@ -109,10 +109,10 @@ cpus_per_sim <- chains * threads_per_chain
 # Will be set from config_grid during execution
 k_bases = 5  # Default, will be overridden
 
-# Margin on the log-time scale used to extend fixed support for log(y) models.
-# Current value preserves the existing support rule:
-#   exp(2) ≈ 7.4x wider on each side of the observed time range.
-log_support_margin <- 2
+# Margin on the log-time scale used by Gaussian fixed/adaptive log(y) models.
+# BP_aft_logy now normalizes log accelerated time dynamically inside Stan,
+# so this value does not affect the Bernstein log(y) run.
+gb_log_support_margin <- 0
 
 # Store a compact posterior reconstruction of the AFT-only baseline
 # hazard/cumulative hazard for plotting. This avoids saving full CmdStan fit
@@ -122,7 +122,7 @@ baseline_recon_grid_size <- 200
 baseline_recon_draws_max <- 500
 
 # Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
-joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+joint_model_type <- "BP_aft_logy"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
 
 if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
   library(aftgee) # alternative semiparametric AFT model
@@ -270,17 +270,22 @@ build_aft_baseline_reconstruction <- function(fit,
       H0_draws[draw_id, t_grid == 0] <- 0
     }
   } else if (joint_model_type == "BP_aft_logy") {
-    span <- stan_data$log_y_upper - stan_data$log_y_lower
-    u <- pmin(
-      pmax((log(t_grid) - stan_data$log_y_lower) / span, eps),
-      1 - eps
-    )
-    pdf_basis <- bernstein_pdf_matrix(u, m)
-    cdf_basis <- bernstein_cdf_matrix(u, m)
-    h_basis <- sweep(pdf_basis, 1, span * t_grid, "/")
+    time <- stan_data$time
+    X_surv <- stan_data$X_surv
 
-    h0_draws <- gamma_draws %*% t(h_basis)
-    H0_draws <- gamma_draws %*% t(cdf_basis)
+    for (draw_id in seq_len(n_draws)) {
+      linpred <- as.vector(X_surv %*% beta_draws[draw_id, ])
+      log_y <- log(time) - linpred
+      log_y_lower <- min(log_y)
+      span <- max(max(log_y) - log_y_lower, eps)
+      u <- pmin(pmax((log(t_grid) - log_y_lower) / span, eps), 1 - eps)
+
+      pdf_basis <- bernstein_pdf_matrix(u, m)
+      cdf_basis <- bernstein_cdf_matrix(u, m)
+
+      h0_draws[draw_id, ] <- as.vector(pdf_basis %*% gamma_draws[draw_id, ]) / (span * t_grid)
+      H0_draws[draw_id, ] <- as.vector(cdf_basis %*% gamma_draws[draw_id, ])
+    }
   } else if (joint_model_type == "GB_aft_logy") {
     knots <- build_fixed_logy_gaussian_knots(
       m,
@@ -687,13 +692,13 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
                                                 k_bases = k_bases)
   }
 
-  if (joint_model_type %in% c("BP_aft_logy", "GB_aft_logy")) {
+  if (joint_model_type == "GB_aft_logy") {
     log_t <- log(stan_data_joint$time)
     L <- min(log_t)
     U <- max(log_t)
 
-    stan_data_joint$log_y_lower <- L - log_support_margin
-    stan_data_joint$log_y_upper <- U + log_support_margin
+    stan_data_joint$log_y_lower <- L - gb_log_support_margin
+    stan_data_joint$log_y_upper <- U + gb_log_support_margin
   }
 
   if (joint_model_type == "GB_aft_logy_adaptive") {
@@ -701,8 +706,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     L <- min(log_t)
     U <- max(log_t)
 
-    stan_data_joint$grid_lower <- L - log_support_margin
-    stan_data_joint$grid_upper <- U + log_support_margin
+    stan_data_joint$grid_lower <- L - gb_log_support_margin
+    stan_data_joint$grid_upper <- U + gb_log_support_margin
 
     stan_data_joint$a_prior_mean <- mean(log_t) # centre at the mean instead of 0 for better scaling
     stan_data_joint$a_prior_scale <- 2
@@ -1047,10 +1052,11 @@ message(sprintf("SLURM_ARRAY_TASK_ID (also the sim_id): %d", sim_id))
 if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
 #### Define configuration grid for ENZAMET ####
-# ENZAMET uses n_patients=1100, max_FU=72, loglogistic distribution
+# ENZAMET uses n_patients=1100, max_FU=72. This run is set to Weibull.
 config_base <- expand.grid(
   n_patients = c(1100),
-  aft_mode   = c("loglogistic"), # current options: "Weibull" and/or "loglogistic"
+  # aft_mode   = c("loglogistic"), # log-logistic run
+  aft_mode   = c("Weibull"), # current options: "Weibull" and/or "loglogistic"
   k_bases    = c(5), # change from 5 to 10 on 20260128
   # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
   # scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
@@ -1154,10 +1160,29 @@ config_id, config_hash, n_patients, lambda_c, aft_mode, k_bases, scenario, max_F
 
 ##########
 # ---- Skip work if this batch output already exists ----
+output_dir <- Sys.getenv("SIM_OUTPUT_DIR", unset = "")
+if (!nzchar(output_dir)) {
+  output_date <- Sys.getenv("SIM_OUTPUT_DATE", unset = format(Sys.Date(), "%Y%m%d"))
+  output_job_id <- Sys.getenv(
+    "SLURM_ARRAY_JOB_ID",
+    unset = Sys.getenv("SLURM_JOB_ID", unset = "local")
+  )
+  output_dir <- file.path(
+    "~/JoMoNoPH-share/Bunya/ENZAMET",
+    paste0("output_", output_date, "_", output_job_id)
+  )
+}
+output_dir <- path.expand(output_dir)
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+}
+message("Batch output directory: ", output_dir)
+
 out_file <- sprintf(
-  "~/JoMoNoPH-share/Bunya/ENZAMET/output/%s_k%d_n%d_cens%s_%s_scen%d_FU%d_batch%03d.rds",
+  "%s_k%d_n%d_cens%s_%s_scen%d_FU%d_batch%03d.rds",
   joint_model_type, k_bases, n_patients, cens_label, aft_mode, scenario, max_FU, batch_id
 )
+out_file <- file.path(output_dir, out_file)
 
 if (file.exists(out_file)) {
   message(sprintf("SKIP: output already exists for this batch: %s", out_file))
