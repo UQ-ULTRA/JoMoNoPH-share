@@ -890,7 +890,7 @@ admin_censoring$n_failed
 # scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1311945
 
 
-# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0): 
+# calibration results (loglogistic, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0): 
 # for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): loglogistic_shape = 1.20, loglogistic_scale = 23.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.2023836
 # scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.3155127
