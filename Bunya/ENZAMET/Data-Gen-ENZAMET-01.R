@@ -100,7 +100,14 @@ log_HR <- 99                      # Log hazard ratio for treatment (HR = exp(log
 # Weibull shape parameter (ν): controls time dependence of the hazard
 # Old Bernstein Polynomial approximation:
 # weibull_shape <- 0.692
-weibull_shape <- 0.70
+# Previous amended BP setting:
+# weibull_shape <- 0.70  # with weibull_scale <- 38.0
+# weibull_shape <- 1.30  # with weibull_scale <- 38.0
+# weibull_shape <- 2.10  # with weibull_scale <- 38.0
+# weibull_shape <- 0.90  # with weibull_scale <- 38.0
+# weibull_shape <- 0.40  # with weibull_scale <- 38.0
+weibull_shape <- 0.70  # default JM calibration setting; ENZAMET-DM.R overrides this per baseline
+# weibull_shape <- 4.20  # previous AFT-only stress-test setting
 
 # Convert baseline log-hazard to hazard rate (λ)
 baseline_hazard_rate <- exp(log_baseline_hazard)  # Used as λ in simsurv
@@ -118,8 +125,8 @@ log_AF <- 0.00
 # Association parameter: PH and AFT linkage
 # alpha_PH  <- 99                                # log hazard ratio per unit Y(t)
 # alpha_AFT <- -alpha_PH / weibull_shape            # log acceleration factor per unit Y(t)
-# alpha_AFT <- 0.012
-alpha_AFT <- 0 # try no association 20260113
+alpha_AFT <- 0.012
+# alpha_AFT <- 0 # previous AFT-only no-association setting
 
 # Under a Weibull baseline, the AFT-scale association (log time) is derived by
 # dividing the PH-scale association (log hazard) by –shape, preserving consistency across scales.

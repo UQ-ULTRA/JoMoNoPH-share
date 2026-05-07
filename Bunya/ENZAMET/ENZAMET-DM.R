@@ -122,7 +122,7 @@ baseline_recon_grid_size <- 200
 baseline_recon_draws_max <- 500
 
 # Joint model selection: "BP" (Bernstein Polynomial), "GB" (Gaussian Basis), "GB_Quantile", "GP" (Gaussian Process), "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft"
-joint_model_type <- "BP_aft"  # Change to "BP", "GB", "GB_Quantile", "GP", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive", or "BP_aft" as needed
+joint_model_type <- "BP"  # sAFT-JM timing run; use "BP_aft" variants for AFT-only simulations
 
 if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
   library(aftgee) # alternative semiparametric AFT model
@@ -497,7 +497,13 @@ convert_data_aft_only <- function(fit_surv,
 # Simulation wrapper function
 ##########
 
-run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_hash, joint_model_type = "BP", k_bases = 5, scenario = 2) {
+run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_hash,
+                           joint_model_type = "BP", k_bases = 5, scenario = 2,
+                           baseline_label = aft_mode,
+                           cfg_weibull_shape,
+                           cfg_weibull_scale,
+                           cfg_loglogistic_shape,
+                           cfg_loglogistic_scale) {
   set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
   
   # Load the appropriate ENZAMET data generator for this scenario
@@ -509,26 +515,19 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # Generate data using ENZAMET data generator
   sim_dat <- simulate_joint_dataset(
-    # D = D,
-    # beta_0 = beta_0,
-    # beta_1 = beta_1,
-    # beta_2 = beta_2,
-    # sigma_e = sigma_e,
-    D = matrix(c(0^2, 0, 0, 0^2), 2, 2), # CAUTION: overwrite values for aft only scenarios
-    beta_0 = 0,
-    beta_1 = 0,
-    beta_2 = 0,
-    sigma_e = 0,
+    D = D,
+    beta_0 = beta_0,
+    beta_1 = beta_1,
+    beta_2 = beta_2,
+    sigma_e = sigma_e,
     log_HR = log_HR, # beta_surv = log_HR for PH models, should always be set in the data generator, double check the data generator files
     log_AF = log_AF, # beta_surv = log_AF for AFT models, should always be set in the data generator, double check the data generator files
-    # alpha_PH = alpha_PH,
-    # alpha_AFT = alpha_AFT,
-    alpha_PH = 0, # CAUTION: overwrite values for aft only scenarios
-    alpha_AFT = 0,
-    weibull_shape = weibull_shape,
-    weibull_scale = weibull_scale,
-    loglogistic_shape = loglogistic_shape, 
-    loglogistic_scale = loglogistic_scale,
+    alpha_PH = 99,
+    alpha_AFT = alpha_AFT,
+    weibull_shape = cfg_weibull_shape,
+    weibull_scale = cfg_weibull_scale,
+    loglogistic_shape = cfg_loglogistic_shape,
+    loglogistic_scale = cfg_loglogistic_scale,
     visit = visit,
     seed = unique_seed,
     n_patients = n_patients,
@@ -993,24 +992,33 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     )
   }
 
-  baseline_recon <- tryCatch({
-    build_aft_baseline_reconstruction(
-      fit = fit_joint,
-      stan_data = stan_data_joint,
-      joint_model_type = joint_model_type,
-      t_max = max_FU,
-      n_grid = baseline_recon_grid_size,
-      max_draws = baseline_recon_draws_max
-    )
-  }, error = function(e) {
-    message("Baseline reconstruction failed: ", e$message)
-    NULL
-  })
+  baseline_recon <- NULL
+  if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+    baseline_recon <- tryCatch({
+      build_aft_baseline_reconstruction(
+        fit = fit_joint,
+        stan_data = stan_data_joint,
+        joint_model_type = joint_model_type,
+        t_max = max_FU,
+        n_grid = baseline_recon_grid_size,
+        max_draws = baseline_recon_draws_max
+      )
+    }, error = function(e) {
+      message("Baseline reconstruction failed: ", e$message)
+      NULL
+    })
+  }
   
   if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     return(list(
       censor_prop = mean(sim_dat$survival$status == 0),
       unique_seed = unique_seed,
+      baseline_label = baseline_label,
+      aft_mode = aft_mode,
+      weibull_shape = cfg_weibull_shape,
+      weibull_scale = cfg_weibull_scale,
+      loglogistic_shape = cfg_loglogistic_shape,
+      loglogistic_scale = cfg_loglogistic_scale,
       # fit_aftgee = fit_aftgee, # it took too much memory to save the full model objects for aftgee, aftsrr, smoothSurv, rstpm2 and spsurv
       # fit_aftsrr = fit_aftsrr, # so decide to just save the coefficients of interest (treatment effect estimates)
       # fit_smoothSurv = fit_smoothSurv,
@@ -1029,6 +1037,12 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     return(list(
       censor_prop = mean(sim_dat$survival$status == 0),
       unique_seed = unique_seed,
+      baseline_label = baseline_label,
+      aft_mode = aft_mode,
+      weibull_shape = cfg_weibull_shape,
+      weibull_scale = cfg_weibull_scale,
+      loglogistic_shape = cfg_loglogistic_shape,
+      loglogistic_scale = cfg_loglogistic_scale,
       joint_summary = summ_joint,
       joint_diagnostics = diag_joint,
       lme_coefs = coefs,
@@ -1051,95 +1065,91 @@ sim_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "0"))
 message(sprintf("SLURM_ARRAY_TASK_ID (also the sim_id): %d", sim_id))
 if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
-#### Define configuration grid for ENZAMET ####
-# ENZAMET uses n_patients=1100, max_FU=72. This run is set to Weibull.
-config_base <- expand.grid(
-  n_patients = c(1100),
-  # aft_mode   = c("loglogistic"), # log-logistic run
-  aft_mode   = c("Weibull"), # current options: "Weibull" and/or "loglogistic"
-  k_bases    = c(5), # change from 5 to 10 on 20260128
-  # scenario   = c(1, 2, 3, 4, 5, 6, 7),  # Data generation scenarios
-  # scenario   = c(1, 2, 3, 4, 5),  # Data generation scenarios
-  scenario   = c(1, 2, 4),  # Data generation scenarios for aft only
-  max_FU     = 72,
-  KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+#### Define configuration grid for ENZAMET sAFT-JM timing run ####
+# 5 baselines x 5 Table 2 scenarios x 2 censoring settings = 50 configs.
+baseline_grid <- data.frame(
+  baseline_label = c("LL120_230", "W070_380", "W090_380", "W130_380", "W210_380"),
+  aft_mode = c("loglogistic", "Weibull", "Weibull", "Weibull", "Weibull"),
+  weibull_shape = c(0.70, 0.70, 0.90, 1.30, 2.10),
+  weibull_scale = c(38.0, 38.0, 38.0, 38.0, 38.0),
+  loglogistic_shape = c(1.20, 1.20, 1.20, 1.20, 1.20),
+  loglogistic_scale = c(23.0, 23.0, 23.0, 23.0, 23.0),
+  stringsAsFactors = FALSE
 )
 
-# lambda_map <- c(weibull = 0.023, loglogistic = 0.013) # under scenario 1, give ~50% censoring
-lambda_c_table <- data.frame( # need different lambda_c values for different scenarios
-  scenario = rep(1:5, each = 2),
-  aft_mode = rep(c("Weibull", "loglogistic"), times = 5),
+config_base <- merge(
+  expand.grid(
+    n_patients = c(1100),
+    k_bases = c(5),
+    scenario = c(1, 2, 3, 4, 5),
+    max_FU = 120,
+    KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+  ),
+  baseline_grid,
+  by = NULL
+)
+
+# 20260507 sAFT-JM lambda_c calibration for target 50% censoring from Data-Gen-test-DM.R.
+lambda_c_table <- data.frame(
+  baseline_label = rep(baseline_grid$baseline_label, each = 5),
+  scenario = rep(1:5, times = nrow(baseline_grid)),
   lambda_c = c(
-    # Old Bernstein Polynomial approximation:
-    # scenario 1: 0.08154297, 0.05322266
-    # scenario 2: 0.05224609, 0.03320312
-    # scenario 3: 0.05224609, 0.03320312
-    # scenario 4: 0.1289062,  0.08251953
-    # scenario 5: 0.1289062,  0.08251953
-    #
-    # Updated 20260427 after amended Bernstein Polynomial approximation:
-    # scenario 1
-    0.02832031, 0.02587891, # for aft only and 50% censoring
-    # scenario 2
-    0.015625, 0.01391602, # for aft only and 50% censoring
-    # scenario 3
-    0.015625, 0.01391602, # for aft only and 50% censoring
-    # scenario 4
-    0.04638672, 0.04150391, # for aft only and 50% censoring
-    # scenario 5
-    0.04638672, 0.04150391 # for aft only and 50% censoring
+    0.009948730, 0.003906250, 0.004272461, 0.017028809, 0.017211914, # loglogistic(1.20, 23.0)
+    0.010864258, 0.004638672, 0.004882812, 0.019042969, 0.019287109, # Weibull(0.70, 38.0)
+    0.009643555, 0.003479004, 0.003784180, 0.017211914, 0.017456055, # Weibull(0.90, 38.0)
+    0.008666992, 0.002227783, 0.002593994, 0.015563965, 0.015716553, # Weibull(1.30, 38.0)
+    0.008056641, 0.001098633, 0.001464844, 0.014099121, 0.014160156  # Weibull(2.10, 38.0)
   ),
   stringsAsFactors = FALSE
 )
 
-# cfg_default <- transform(config_base,
-#                          lambda_c = lambda_map[tolower(aft_mode)])
 cfg_default <- merge(
   config_base,
   lambda_c_table,
-  by = c("scenario", "aft_mode"),
+  by = c("baseline_label", "scenario"),
   all.x = TRUE,
   sort = FALSE
 )
 cfg_default$cens_label <- "50"
 
-cfg_zero <- transform(config_base,
-                      lambda_c = 0,
-                      cens_label = "0") # 0 for no censoring
-
-# Administrative censoring only at max_FU.
+# Administrative censoring only at max_FU = 120.
 # lambda_c < 0 triggers T_obs = min(T_i, max_FU), status = I(T_i <= max_FU).
-# Data-Gen-test-DM.R 20260427 administrative-only (aft only) check, loglogistic:
-# scenario 1 avg censoring = 0.2023836
-# scenario 2/3 avg censoring = 0.3155127
-# scenario 4/5 avg censoring = 0.1409127
-# Weibull:
-# scenario 1 avg censoring = 0.2090255
-# scenario 2/3 avg censoring = 0.32196
-# scenario 4/5 avg censoring = 0.1311945
 cfg_admin <- transform(config_base,
                        lambda_c = -1,
                        cens_label = "admin")
 
-config_grid <- rbind(cfg_default, cfg_zero, cfg_admin)
+config_grid <- rbind(cfg_default, cfg_admin)
+config_grid <- config_grid[order(
+  match(config_grid$baseline_label, baseline_grid$baseline_label),
+  config_grid$scenario,
+  match(config_grid$cens_label, c("50", "admin"))
+), ]
 row.names(config_grid) <- NULL
 
-# Define batch structure (e.g. 100 sims per batch, 1000 total sims)
-# batch_size <- 100
-# sims_per_config <- 1000
-batch_size <- 10 # try 10 first for testing
-sims_per_config <- 100 # try 100 first for testing
-batches_per_config <- sims_per_config / batch_size  
+# Small timing run: one replicate per config. For final 1000 replicates per
+# scenario, set sims_per_config <- 1000 and choose a practical batch_size.
+batch_size <- 1
+sims_per_config <- 1
+batches_per_config <- sims_per_config / batch_size
 
 # Decode SLURM array index into config ID and batch ID
 config_id <- ((sim_id - 1) %/% batches_per_config) + 1      
 batch_id  <- ((sim_id - 1) %% batches_per_config) + 1       
+total_array_tasks <- nrow(config_grid) * batches_per_config
+if (sim_id > total_array_tasks) {
+  stop(sprintf("SLURM_ARRAY_TASK_ID %d exceeds configured array size %d.", sim_id, total_array_tasks))
+}
 
 # Pull scenario settings for this SLURM job
 config <- config_grid[config_id, ]
 n_patients <- config$n_patients
 lambda_c <- config$lambda_c
 aft_mode <- config$aft_mode
+baseline_label <- config$baseline_label
+weibull_shape <- config$weibull_shape
+weibull_scale <- config$weibull_scale
+loglogistic_shape <- config$loglogistic_shape
+loglogistic_scale <- config$loglogistic_scale
 max_FU <- config$max_FU
 k_bases <- config$k_bases
 scenario <- config$scenario
@@ -1155,8 +1165,8 @@ trial_ids <- ((batch_id - 1) * batch_size + 1):(batch_id * batch_size)
 config_hash <- config_id # use config_id as hash since it's already a unique integer identifier for the config
 # print config and config_hash for debugging
 message(sprintf("Config ID: %d, Config Hash: %d, n_patients:
-%d, lambda_c: %.5f, aft_mode: %s, k_bases: %d, scenario: %d, max_FU: %d",
-config_id, config_hash, n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU))
+%d, lambda_c: %.5f, baseline: %s, aft_mode: %s, k_bases: %d, scenario: %d, max_FU: %d",
+config_id, config_hash, n_patients, lambda_c, baseline_label, aft_mode, k_bases, scenario, max_FU))
 
 ##########
 # ---- Skip work if this batch output already exists ----
@@ -1180,7 +1190,7 @@ message("Batch output directory: ", output_dir)
 
 out_file <- sprintf(
   "%s_k%d_n%d_cens%s_%s_scen%d_FU%d_batch%03d.rds",
-  joint_model_type, k_bases, n_patients, cens_label, aft_mode, scenario, max_FU, batch_id
+  joint_model_type, k_bases, n_patients, cens_label, baseline_label, scenario, max_FU, batch_id
 )
 out_file <- file.path(output_dir, out_file)
 
@@ -1195,8 +1205,8 @@ if (file.exists(out_file)) {
 ##########
 
 message(sprintf(
-  "Running batch %d (config_id %d: n=%d, censoring=%s, k=%d, scenario=%d, model=%s, ENZAMET)",
-  batch_id, config_id, n_patients, cens_label, k_bases, scenario, joint_model_type
+  "Running batch %d (config_id %d: n=%d, censoring=%s, baseline=%s, k=%d, scenario=%d, model=%s, ENZAMET)",
+  batch_id, config_id, n_patients, cens_label, baseline_label, k_bases, scenario, joint_model_type
 ))
 
 # Detect number of available CPUs from SLURM
@@ -1217,7 +1227,11 @@ results <- future_map(
     ans <- tryCatch({
       on.exit(setTimeLimit(cpu = Inf, elapsed = Inf, transient = TRUE), add = TRUE)
       setTimeLimit(elapsed = safe_elapsed, cpu = Inf, transient = TRUE)
-      run_simulation(.x, n_patients, lambda_c, aft_mode, max_FU, config_hash, joint_model_type, k_bases, scenario)
+      run_simulation(
+        .x, n_patients, lambda_c, aft_mode, max_FU, config_hash,
+        joint_model_type, k_bases, scenario, baseline_label,
+        weibull_shape, weibull_scale, loglogistic_shape, loglogistic_scale
+      )
     }, error = function(e) {
       if (grepl("reached elapsed time limit", conditionMessage(e))) NULL else stop(e)
     })
