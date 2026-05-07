@@ -444,12 +444,12 @@ sim_data <- simulate_joint_dataset(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -479,12 +479,12 @@ sim_data <- simulate_joint_dataset(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -547,12 +547,12 @@ avg_censoring(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -628,12 +628,12 @@ avg_censoring_parallel(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -756,12 +756,12 @@ res <- calibrate_lambda_c(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -797,7 +797,7 @@ res$avg_censoring
 # seeds = 1e6 * as.integer(as.numeric(as.factor(paste(c(1100), c(0.05322266, 0.03295898, 0.08300781), c("Weibull", "loglogistic"), c(5), c(1,2,4), c(72), sep = "_"))))
 
 
-##### find lambda_c's for "aft only" data generation using 500 seeds (run this) #####
+##### find lambda_c's (control censoring proportion) for "aft only" data generation using 500 seeds (run this) #####
 res <- calibrate_lambda_c(
   target_cens = 0.50,
   # seeds = 1:100, # use 1:100 seeds
@@ -820,12 +820,12 @@ res <- calibrate_lambda_c(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -935,12 +935,12 @@ admin_censoring <- avg_censoring_parallel(
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
   # Previous amended BP setting:
-  # weibull_shape = 0.70,
   # weibull_shape = 1.30,
   # weibull_shape = 2.10,
   # weibull_shape = 0.90,
   # weibull_shape = 0.40,
-  weibull_shape = 4.20,
+  # weibull_shape = 4.20,
+  weibull_shape = 0.70,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -1014,3 +1014,283 @@ admin_censoring$n_failed
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.2023836
 # scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.3155127
 # scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1409127
+
+
+
+##### find lambda_c's (control censoring proportion) for sAFT-JM data generation using Table 2 scenarios (load all four functions here) #####
+# This section uses the rounded ENZAMET-inspired joint-model parameters in Table 2.
+# In the data generation code, gamma in Table 2 is passed as log_AF.
+# alpha_AFT is the longitudinal association parameter in the AFT event-time model.
+
+jm_scenarios_table2 <- tibble::tribble(
+  ~scenario, ~beta_1, ~beta_2, ~beta_1_plus_beta_2, ~log_AF,
+  1L,        -0.04,   0.00,    -0.04,               0.00,
+  2L,        -0.04,   0.04,     0.00,               0.90,
+  3L,        -0.04,  -0.04,    -0.08,               0.90,
+  4L,        -0.04,   0.04,     0.00,              -0.90,
+  5L,        -0.04,  -0.04,    -0.08,              -0.90
+)
+
+calibrate_lambda_c_jm <- function(scenario_id,
+                                  target_cens = 0.50,
+                                  seeds = 1:500,
+                                  n_patients = 1100,
+                                  n_cores = 8,
+                                  lambda_bounds = c(0, 1),
+                                  tol = 0.001,
+                                  max_iter = 20,
+                                  max_FU = 72,
+                                  aft_mode = "Weibull",
+                                  weibull_shape = 0.70,
+                                  weibull_scale = 38.0,
+                                  loglogistic_shape = 1.20,
+                                  loglogistic_scale = 23.0,
+                                  alpha_AFT = 0.012,
+                                  verbose = TRUE) {
+
+  scenario_row <- jm_scenarios_table2[jm_scenarios_table2$scenario == scenario_id, ]
+  if (nrow(scenario_row) != 1) {
+    stop("scenario_id must be one of: ", paste(jm_scenarios_table2$scenario, collapse = ", "))
+  }
+
+  sigma_0 <- 15
+  sigma_1 <- 0.20
+  rho_01 <- -0.10
+  sigma_01 <- rho_01 * sigma_0 * sigma_1
+  D_jm <- matrix(c(sigma_0^2, sigma_01, sigma_01, sigma_1^2), 2, 2)
+
+  res <- calibrate_lambda_c(
+    target_cens = target_cens,
+    seeds = seeds,
+    n_patients = n_patients,
+    n_cores = n_cores,
+    lambda_bounds = lambda_bounds,
+    tol = tol,
+    max_iter = max_iter,
+    verbose = verbose,
+    D = D_jm,
+    beta_0 = 73,
+    beta_1 = scenario_row$beta_1,
+    beta_2 = scenario_row$beta_2,
+    sigma_e = 12,
+    log_HR = 99,
+    alpha_PH = 99,
+    log_AF = scenario_row$log_AF,
+    alpha_AFT = alpha_AFT,
+    weibull_shape = weibull_shape,
+    weibull_scale = weibull_scale,
+    loglogistic_shape = loglogistic_shape,
+    loglogistic_scale = loglogistic_scale,
+    visit = c(0, 1, seq(3, 92, 3)),
+    max_FU = max_FU,
+    aft_mode = aft_mode,
+    link_type = "value"
+  )
+
+  dplyr::bind_cols(
+    scenario_row,
+    tibble::tibble(
+      aft_mode = aft_mode,
+      weibull_shape = weibull_shape,
+      weibull_scale = weibull_scale,
+      loglogistic_shape = loglogistic_shape,
+      loglogistic_scale = loglogistic_scale,
+      alpha_AFT = alpha_AFT,
+      max_FU = max_FU,
+      target_cens = target_cens,
+      lambda_c = res$lambda_c,
+      avg_censoring = res$avg_censoring,
+      iterations = res$iterations,
+      converged = res$converged
+    )
+  )
+}
+
+calibrate_lambda_c_jm_all_scenarios <- function(scenarios = jm_scenarios_table2$scenario,
+                                                ...) {
+  dplyr::bind_rows(lapply(scenarios, function(scenario_id) {
+    calibrate_lambda_c_jm(scenario_id = scenario_id, ...)
+  }))
+}
+
+avg_admin_censoring_jm <- function(scenario_id,
+                                   seeds = 1:500,
+                                   n_patients = 1100,
+                                   n_cores = 8,
+                                   max_FU = 72,
+                                   aft_mode = "Weibull",
+                                   weibull_shape = 0.70,
+                                   weibull_scale = 38.0,
+                                   loglogistic_shape = 1.20,
+                                   loglogistic_scale = 23.0,
+                                   alpha_AFT = 0.012,
+                                   verbose = TRUE) {
+
+  scenario_row <- jm_scenarios_table2[jm_scenarios_table2$scenario == scenario_id, ]
+  if (nrow(scenario_row) != 1) {
+    stop("scenario_id must be one of: ", paste(jm_scenarios_table2$scenario, collapse = ", "))
+  }
+
+  sigma_0 <- 15
+  sigma_1 <- 0.20
+  rho_01 <- -0.10
+  sigma_01 <- rho_01 * sigma_0 * sigma_1
+  D_jm <- matrix(c(sigma_0^2, sigma_01, sigma_01, sigma_1^2), 2, 2)
+
+  res <- avg_censoring_parallel(
+    lambda_c = -1,
+    seeds = seeds,
+    n_patients = n_patients,
+    n_cores = n_cores,
+    verbose = verbose,
+    D = D_jm,
+    beta_0 = 73,
+    beta_1 = scenario_row$beta_1,
+    beta_2 = scenario_row$beta_2,
+    sigma_e = 12,
+    log_HR = 99,
+    alpha_PH = 99,
+    log_AF = scenario_row$log_AF,
+    alpha_AFT = alpha_AFT,
+    weibull_shape = weibull_shape,
+    weibull_scale = weibull_scale,
+    loglogistic_shape = loglogistic_shape,
+    loglogistic_scale = loglogistic_scale,
+    visit = c(0, 1, seq(3, 92, 3)),
+    max_FU = max_FU,
+    aft_mode = aft_mode,
+    link_type = "value"
+  )
+
+  dplyr::bind_cols(
+    scenario_row,
+    tibble::tibble(
+      aft_mode = aft_mode,
+      weibull_shape = weibull_shape,
+      weibull_scale = weibull_scale,
+      loglogistic_shape = loglogistic_shape,
+      loglogistic_scale = loglogistic_scale,
+      alpha_AFT = alpha_AFT,
+      max_FU = max_FU,
+      lambda_c = -1,
+      avg_censoring = res$avg_censoring,
+      n_failed = res$n_failed
+    )
+  )
+}
+
+avg_admin_censoring_jm_all_scenarios <- function(scenarios = jm_scenarios_table2$scenario,
+                                                 ...) {
+  dplyr::bind_rows(lapply(scenarios, function(scenario_id) {
+    avg_admin_censoring_jm(scenario_id = scenario_id, ...)
+  }))
+}
+
+###### Example usage for one Table 2 sAFT-JM scenario (run this) ######
+# jm_res <- calibrate_lambda_c_jm(
+#   scenario_id = 1,       # Table 2 scenario: 1, 2, 3, 4, or 5
+#   target_cens = 0.50,
+#   seeds = 1:500,
+#   n_patients = 1100,
+#   n_cores = 8,
+#   lambda_bounds = c(0, 1),
+#   tol = 0.001,
+#   max_FU = 72,
+#   aft_mode = "Weibull",  # "Weibull" or "loglogistic"
+#   # Candidate Weibull baselines:
+#   weibull_shape = 0.70,
+#   # weibull_shape = 0.90,
+#   # weibull_shape = 1.30,
+#   # weibull_shape = 2.10,
+#   weibull_scale = 38.0,
+#   loglogistic_shape = 1.20,
+#   loglogistic_scale = 23.0,
+#   alpha_AFT = 0.012
+# )
+# 
+# jm_res
+
+###### Optional: calibrate all five Table 2 sAFT-JM scenarios for the chosen baseline ######
+jm_res_all <- calibrate_lambda_c_jm_all_scenarios(
+  target_cens = 0.50,
+  seeds = 1:500,
+  n_patients = 1100,
+  n_cores = 8,
+  lambda_bounds = c(0, 1),
+  tol = 0.001,
+  max_FU = 120,
+  aft_mode = "Weibull", # "Weibull" or "loglogistic"
+  weibull_shape = 1.30, # 0.7, 0.9, 1.3, 2.1
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
+  alpha_AFT = 0.012
+)
+
+jm_res_all
+
+# max_FU = 120, target_cens = 0.50, loglogistic(1.20, 23.0), lambda_c values of Table 2 scenario 1-5: 0.009948730 0.003906250 0.004272461 0.017028809 0.017211914, and avg_censoring 0.5003491 0.5002273 0.5009836 0.4994745 0.4994018
+# max_FU = 120, target_cens = 0.50, Weibull(0.70, 38.0), lambda_c values of Table 2 scenario 1-5: 0.010864258 0.004638672 0.004882812 0.019042969 0.019287109, and avg_censoring 0.4993636 0.4996927 0.5003436 0.5008727 0.5001236
+# max_FU = 120, target_cens = 0.50, Weibull(0.90, 38.0), lambda_c values of Table 2 scenario 1-5: 0.009643555 0.003479004 0.003784180 0.017211914 0.017456055, and avg_censoring 0.5000636 0.5007182 0.5002345 0.5005545 0.4991873
+# max_FU = 120, target_cens = 0.50, Weibull(1.30, 38.0), lambda_c values of Table 2 scenario 1-5: 0.008666992 0.002227783 0.002593994 0.015563965 0.015716553, and avg_censoring 0.5009473 0.4996927 0.5008764 0.5009491 0.4997655
+# max_FU = 120, target_cens = 0.50, Weibull(2.10, 38.0), lambda_c values of Table 2 scenario 1-5: 0.008056641 0.001098633 0.001464844 0.014099121 0.014160156, and avg_censoring 0.4996691 0.4997836 0.4991836 0.5008964 0.4992164
+
+
+
+
+
+
+###### Example usage for administrative censoring only in one Table 2 sAFT-JM scenario (run this) ######
+# jm_admin_res <- avg_admin_censoring_jm(
+#   scenario_id = 1,       # Table 2 scenario: 1, 2, 3, 4, or 5
+#   seeds = 1:500,
+#   n_patients = 1100,
+#   n_cores = 8,
+#   max_FU = 72,
+#   aft_mode = "Weibull",  # "Weibull" or "loglogistic"
+#   # Candidate Weibull baselines:
+#   weibull_shape = 0.70,
+#   # weibull_shape = 0.90,
+#   # weibull_shape = 1.30,
+#   # weibull_shape = 2.10,
+#   weibull_scale = 38.0,
+#   loglogistic_shape = 1.20,
+#   loglogistic_scale = 23.0,
+#   alpha_AFT = 0.012
+# )
+# 
+# jm_admin_res
+
+###### Optional: administrative censoring only for all five Table 2 sAFT-JM scenarios ######
+jm_admin_res_all <- avg_admin_censoring_jm_all_scenarios(
+  seeds = 1:500,
+  n_patients = 1100,
+  n_cores = 8,
+  max_FU = 120,
+  aft_mode = "Weibull", # "Weibull" or "loglogistic"
+  weibull_shape = 0.9, # 0.7, 0.9, 1.3, 2.1
+  weibull_scale = 38.0,
+  loglogistic_shape = 1.20,
+  loglogistic_scale = 23.0,
+  alpha_AFT = 0.012
+)
+
+jm_admin_res_all
+
+# max_FU = 72, loglogistic(1.20, 23.0), avg_censoring of Table 2 scenario 1-5: 0.4163582 0.5477473 0.5430855 0.3079255 0.3040436
+# max_FU = 72, Weibull(0.70, 38.0), avg_censoring of Table 2 scenario 1-5: 0.4234927 0.5296364 0.5268291 0.3143327 0.3108055
+# max_FU = 72, Weibull(0.90, 38.0), avg_censoring of Table 2 scenario 1-5: 0.4381073 0.5665818 0.5625055 0.3019745 0.2981564
+# max_FU = 72, Weibull(1.30, 38.0), avg_censoring of Table 2 scenario 1-5: 0.4686127 0.6295800 0.6250236 0.2846818 0.2798309
+# max_FU = 72, Weibull(2.10, 38.0), avg_censoring of Table 2 scenario 1-5: 0.5208509 0.7135055 0.7097036 0.2775891 0.2743527
+
+# max_FU = 96, loglogistic(1.20, 23.0), avg_censoring of Table 2 scenario 1-5: 0.3358327 0.4696655 0.4618291 0.2443091 0.2393473
+# max_FU = 96, Weibull(0.70, 38.0), avg_censoring of Table 2 scenario 1-5: 0.3486964 0.4608709 0.4559527 0.2460382 0.2422836
+# max_FU = 96, Weibull(0.90, 38.0), avg_censoring of Table 2 scenario 1-5: 0.3432418 0.4843345 0.4780073 0.2219727 0.2175782
+# max_FU = 96, Weibull(1.30, 38.0), avg_censoring of Table 2 scenario 1-5: 0.3333727 0.5224927 0.5150164 0.1867309 0.1834345
+# max_FU = 96, Weibull(2.10, 38.0), avg_censoring of Table 2 scenario 1-5: 0.3157691 0.5753436 0.5674418 0.1607618 0.1599491
+
+# max_FU = 120, loglogistic(1.20, 23.0), avg_censoring of Table 2 scenario 1-5: 0.2782564 0.4080382 0.3983382 0.1999982 0.1952182
+# max_FU = 120, Weibull(0.70, 38.0), avg_censoring of Table 2 scenario 1-5: 0.2909709 0.4065145 0.3995782 0.1975455 0.1937400
+# max_FU = 120, Weibull(0.90, 38.0), avg_censoring of Table 2 scenario 1-5: 0.2701600 0.4167018 0.4077364 0.1660855 0.1617945
+# max_FU = 120, Weibull(1.30, 38.0), avg_censoring of Table 2 scenario 1-5: 0.2321873 0.4332055 0.4228909 0.1240382 0.1222836
+# max_FU = 120, Weibull(2.10, 38.0), avg_censoring of Table 2 scenario 1-5: 0.17286000 0.46067818 0.44663091 0.08716182 0.08703636
