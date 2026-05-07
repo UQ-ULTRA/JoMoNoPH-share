@@ -443,7 +443,13 @@ sim_data <- simulate_joint_dataset(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -472,7 +478,13 @@ sim_data <- simulate_joint_dataset(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -534,7 +546,13 @@ avg_censoring(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -609,7 +627,13 @@ avg_censoring_parallel(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -731,7 +755,13 @@ res <- calibrate_lambda_c(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -744,7 +774,7 @@ res <- calibrate_lambda_c(
 res$lambda_c
 res$avg_censoring
 
-# calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0, max_FU=72): 
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.05331733
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.0332998
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90): lambda_c = 0.0332998
@@ -752,7 +782,7 @@ res$avg_censoring
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90): lambda_c = 0.08236716
 
 
-# calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0, max_FU=72): 
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.08114658
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.05234087
 # scenario 3 (beta_2 = -0.04, log_AF = 0.90): lambda_c = 0.05234087
@@ -765,6 +795,8 @@ res$avg_censoring
 
 # seeds = 1e6 * as.integer(as.numeric(as.factor(paste(n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU, sep = "_")))) + 1:
 # seeds = 1e6 * as.integer(as.numeric(as.factor(paste(c(1100), c(0.05322266, 0.03295898, 0.08300781), c("Weibull", "loglogistic"), c(5), c(1,2,4), c(72), sep = "_"))))
+
+
 ##### find lambda_c's for "aft only" data generation using 500 seeds (run this) #####
 res <- calibrate_lambda_c(
   target_cens = 0.50,
@@ -787,7 +819,13 @@ res <- calibrate_lambda_c(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -800,7 +838,7 @@ res <- calibrate_lambda_c(
 res$lambda_c
 res$avg_censoring
 
-# calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# calibration results (Weibull, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0, max_FU=72): 
 # for the old Bernstein Polynomial approximation: weibull_shape = 0.692, weibull_scale = 13.823,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.08203125
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.05175781
@@ -808,7 +846,7 @@ res$avg_censoring
 # scenario 4 (beta_2 = 0.04, log_AF = -0.90): lambda_c = 0.1298828
 # scenario 5 (beta_2 = -0.04, log_AF = -0.90): lambda_c = 0.1298828
 
-# calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0): 
+# calibration results (log-logistic, 50% censoring, 1:100 seeds, n=1100, alpha_AFT=0, max_FU=72): 
 # for the old Bernstein Polynomial approximation: loglogistic_shape = 1.75, loglogistic_scale = 12.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.05322266
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.03295898; (1e6*1+1):(1e6*1+100) seeds produce lambda_c = 0.03320312
@@ -818,7 +856,7 @@ res$avg_censoring
 
 
 
-# calibration results (Weibull, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0, all beta=0):
+# calibration results (Weibull, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0, all beta=0, max_FU=72):
 # for the old Bernstein Polynomial approximation: weibull_shape = 0.692, weibull_scale = 13.823,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.08154297, avg_censoring = 0.5001691
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.05224609, avg_censoring = 0.5003527
@@ -832,8 +870,34 @@ res$avg_censoring
 # scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.015625, avg_censoring = 0.5001
 # scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.04638672, avg_censoring = 0.4999345
 
+# 20260506
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.40, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.04052734, avg_censoring = 0.5001927
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.02441406, avg_censoring = 0.4993745
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.06445312, avg_censoring = 0.4990636
 
-# calibration results (log-logistic, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0, all beta=0): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.90, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.02563477, avg_censoring = 0.4992855
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.0135498, avg_censoring = 0.4999655
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.04223633, avg_censoring = 0.4997545
+
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 1.30, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.02368164, avg_censoring = 0.5006127
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.01171875, avg_censoring = 0.5009891
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.03808594, avg_censoring = 0.4994727
+
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 2.10, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.02233887, avg_censoring = 0.50036
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.009887695, avg_censoring = 0.5008618
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.03466797, avg_censoring = 0.5002764
+
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 4.20, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.02062988, avg_censoring = 0.5003127
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = 0.006469727, avg_censoring = 0.5009564
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = 0.03149414, avg_censoring = 0.5007145
+
+
+# calibration results (log-logistic, 50% censoring, 1:500 seeds, n=1100, alpha_AFT=0, all beta=0, max_FU=72): 
 # for the old Bernstein Polynomial approximation: loglogistic_shape = 1.75, loglogistic_scale = 12.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = 0.05322266, avg_censoring = 0.5001255
 # scenario 2 (beta_2 = 0.04, log_AF = 0.90): lambda_c = 0.03320312, avg_censoring = 0.5007873
@@ -849,7 +913,7 @@ res$avg_censoring
 
 
 
-##### check administrative censoring only "aft-only" using 500 seeds #####
+##### check administrative censoring only "aft-only" using 500 seeds (run this) #####
 # lambda_c < 0 triggers administrative censoring only:
 #   T_obs = min(T_i, max_FU), status = I(T_i <= max_FU)
 admin_censoring <- avg_censoring_parallel(
@@ -870,7 +934,13 @@ admin_censoring <- avg_censoring_parallel(
   # weibull_scale = 13.823,
   # loglogistic_shape = 1.75,
   # loglogistic_scale = 12.0,
-  weibull_shape = 0.70,
+  # Previous amended BP setting:
+  # weibull_shape = 0.70,
+  # weibull_shape = 1.30,
+  # weibull_shape = 2.10,
+  # weibull_shape = 0.90,
+  # weibull_shape = 0.40,
+  weibull_shape = 4.20,
   weibull_scale = 38.0,
   loglogistic_shape = 1.20,
   loglogistic_scale = 23.0,
@@ -883,14 +953,63 @@ admin_censoring <- avg_censoring_parallel(
 admin_censoring$avg_censoring
 admin_censoring$n_failed
 
-# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0): 
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=72): 
 # for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.70, weibull_scale = 38.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.2090255
 # scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.32196
 # scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1311945
 
+# 20260506
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=72): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.90, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.1689982
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.3109982
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.09368182
 
-# calibration results (loglogistic, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0): 
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=72): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 1.30, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.1001582
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.2949364
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.05034182
+
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=72): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 2.10, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.02129636
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.2904255
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.01054182
+
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=72): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 4.20, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.35774
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0
+
+
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=84): 
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 2.10, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.004929091
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.2269218
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.002345455
+
+# calibration results (Weibull, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=96):
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 0.70, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.1471982
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.2542164
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.08718545
+
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 1.30, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.03498909
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1950909
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.01736
+
+# for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): weibull_shape = 2.10, weibull_scale = 38.0,
+# scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.0008709091
+# scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.1741564
+# scenario 4 and 5 (beta_2 = 0.00, log_AF = -0.90): lambda_c = -1 (any negative value), avg_censoring = 0.0004345455
+
+
+
+# calibration results (loglogistic, administrative censoring only, 1:500 seeds, n=1100, alpha_AFT=0, max_FU=72): 
 # for the amended BP approximation (b2 = exp(b2) ./ tau_aft, B2 = exp(B2)): loglogistic_shape = 1.20, loglogistic_scale = 23.0,
 # scenario 1 (beta_2 = 0.00, log_AF = 0.00): lambda_c = -1 (any negative value), avg_censoring = 0.2023836
 # scenario 2 and 3 (beta_2 = 0.00, log_AF = 0.90): lambda_c = -1 (any negative value), avg_censoring = 0.3155127
