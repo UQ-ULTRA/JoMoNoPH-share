@@ -1065,15 +1065,16 @@ sim_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "0"))
 message(sprintf("SLURM_ARRAY_TASK_ID (also the sim_id): %d", sim_id))
 if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
-#### Define configuration grid for ENZAMET sAFT-JM timing run ####
-# 5 baselines x 5 Table 2 scenarios x 2 censoring settings = 50 configs.
+#### Define configuration grid for ENZAMET sAFT-JM full run ####
+# 3 baselines x 5 Table 2 scenarios x 2 censoring settings = 30 configs.
+# Active baselines: loglogistic(1.20, 23.0), Weibull(0.90, 38.0), Weibull(1.30, 38.0).
 baseline_grid <- data.frame(
-  baseline_label = c("LL120_230", "W070_380", "W090_380", "W130_380", "W210_380"),
-  aft_mode = c("loglogistic", "Weibull", "Weibull", "Weibull", "Weibull"),
-  weibull_shape = c(0.70, 0.70, 0.90, 1.30, 2.10),
-  weibull_scale = c(38.0, 38.0, 38.0, 38.0, 38.0),
-  loglogistic_shape = c(1.20, 1.20, 1.20, 1.20, 1.20),
-  loglogistic_scale = c(23.0, 23.0, 23.0, 23.0, 23.0),
+  baseline_label = c("LL120_230", "W090_380", "W130_380"),
+  aft_mode = c("loglogistic", "Weibull", "Weibull"),
+  weibull_shape = c(NA_real_, 0.90, 1.30),
+  weibull_scale = c(NA_real_, 38.0, 38.0),
+  loglogistic_shape = c(1.20, NA_real_, NA_real_),
+  loglogistic_scale = c(23.0, NA_real_, NA_real_),
   stringsAsFactors = FALSE
 )
 
@@ -1095,10 +1096,8 @@ lambda_c_table <- data.frame(
   scenario = rep(1:5, times = nrow(baseline_grid)),
   lambda_c = c(
     0.009948730, 0.003906250, 0.004272461, 0.017028809, 0.017211914, # loglogistic(1.20, 23.0)
-    0.010864258, 0.004638672, 0.004882812, 0.019042969, 0.019287109, # Weibull(0.70, 38.0)
     0.009643555, 0.003479004, 0.003784180, 0.017211914, 0.017456055, # Weibull(0.90, 38.0)
-    0.008666992, 0.002227783, 0.002593994, 0.015563965, 0.015716553, # Weibull(1.30, 38.0)
-    0.008056641, 0.001098633, 0.001464844, 0.014099121, 0.014160156  # Weibull(2.10, 38.0)
+    0.008666992, 0.002227783, 0.002593994, 0.015563965, 0.015716553  # Weibull(1.30, 38.0)
   ),
   stringsAsFactors = FALSE
 )
