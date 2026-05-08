@@ -30,6 +30,7 @@ module load r/4.4.0-gfbf-2023a
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
+export SLURM_ARRAY_TASK_OFFSET=0
 export SIM_OUTPUT_DATE="$JOB_OUTPUT_DATE"
 export SIM_OUTPUT_JOB_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
 export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output_${SIM_OUTPUT_DATE}_${SIM_OUTPUT_JOB_ID}"
@@ -38,6 +39,7 @@ mkdir -p "$SIM_OUTPUT_DIR"
 echo "SLURM Job ID: $SLURM_JOB_ID"
 echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
+echo "Array Task Offset: $SLURM_ARRAY_TASK_OFFSET"
 echo "Host: $(hostname)"
 echo "CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "Model: BP sAFT-JM full run; unsplit launcher for first 1000 of 3750 tasks; prefer ENZAMET-DM-1..4.slurm for full split run"

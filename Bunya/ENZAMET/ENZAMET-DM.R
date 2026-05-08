@@ -1060,10 +1060,17 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
 # SLURM Job Mapping Logic
 ##########
 
-# Read job ID from environment
-sim_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "0"))
-message(sprintf("SLURM_ARRAY_TASK_ID (also the sim_id): %d", sim_id))
-if (sim_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
+# Read local array task ID and optional offset from environment.
+# The offset lets split SLURM files keep local array IDs under site limits
+# while preserving the global 1..total_array_tasks mapping.
+array_task_id <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "0"))
+array_task_offset <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_OFFSET", unset = "0"))
+sim_id <- array_task_id + array_task_offset
+message(sprintf(
+  "SLURM_ARRAY_TASK_ID: %d, SLURM_ARRAY_TASK_OFFSET: %d, global sim_id: %d",
+  array_task_id, array_task_offset, sim_id
+))
+if (array_task_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
 #### Define configuration grid for ENZAMET sAFT-JM full run ####
 # 3 baselines x 5 Table 2 scenarios x 2 censoring settings = 30 configs.
