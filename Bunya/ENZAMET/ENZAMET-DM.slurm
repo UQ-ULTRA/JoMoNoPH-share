@@ -5,7 +5,7 @@
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=16
 ## change to 40 for larger simulation
-#SBATCH --array=1-7500%100
+#SBATCH --array=1-1000%100
 #SBATCH --mem=10GB
 ## change to 40GB for larger simulation
 #SBATCH --time=02:00:00
@@ -40,7 +40,7 @@ echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Host: $(hostname)"
 echo "CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "Model: BP sAFT-JM full run; 3 baselines x 5 scenarios x 2 censoring settings; 1000 reps/config"
+echo "Model: BP sAFT-JM full run; unsplit launcher for first 1000 of 3750 tasks; prefer ENZAMET-DM-1..4.slurm for full split run"
 echo "Output directory: $SIM_OUTPUT_DIR"
 echo "SLURM .out directory: $JOB_OUTPUT_DIR"
 
