@@ -5,10 +5,10 @@
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=20
 ## change to 40 for larger simulation
-#SBATCH --array=1-50
+#SBATCH --array=1-5000%50
 #SBATCH --mem=10GB
 ## change to 40GB for larger simulation
-#SBATCH --time=04:00:00
+#SBATCH --time=06:00:00
 ## change to 8 for larger simulation
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr
@@ -40,7 +40,7 @@ echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Host: $(hostname)"
 echo "CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "Model: BP sAFT-JM timing run; 5 baselines x 5 scenarios x 2 censoring settings"
+echo "Model: BP sAFT-JM full run; 5 baselines x 5 scenarios x 2 censoring settings; 1000 reps/config"
 echo "Output directory: $SIM_OUTPUT_DIR"
 echo "SLURM .out directory: $JOB_OUTPUT_DIR"
 

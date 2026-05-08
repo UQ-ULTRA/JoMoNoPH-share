@@ -1126,10 +1126,9 @@ config_grid <- config_grid[order(
 ), ]
 row.names(config_grid) <- NULL
 
-# Small timing run: one replicate per config. For final 1000 replicates per
-# scenario, set sims_per_config <- 1000 and choose a practical batch_size.
-batch_size <- 1
-sims_per_config <- 1
+# Full run: 1000 replicates per config, split into 100 batches of 10.
+batch_size <- 10
+sims_per_config <- 1000
 batches_per_config <- sims_per_config / batch_size
 
 # Decode SLURM array index into config ID and batch ID
@@ -1217,7 +1216,7 @@ workers <- min(workers, length(trial_ids))
 # Set up parallel backend
 plan(multisession, workers = workers)
 
-safe_elapsed <- 7200  # 2 hours wall time per trial
+safe_elapsed <- 10200  # 2 hours 50 minutes per trial; leaves buffer inside 6-hour batches
 
 results <- future_map(
   trial_ids,
