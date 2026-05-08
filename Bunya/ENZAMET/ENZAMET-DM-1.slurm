@@ -4,7 +4,7 @@
 ##SBATCH --nodelist=bun[083-115,126-143]
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=16
-#SBATCH --array=1-875%100
+#SBATCH --array=1-938%100
 #SBATCH --mem=10GB
 #SBATCH --time=02:00:00
 #SBATCH --partition=general
@@ -37,7 +37,7 @@ echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
 echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
 echo "Host: $(hostname)"
 echo "CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "Model: BP sAFT-JM full run; part 1/4; tasks 1-875"
+echo "Model: BP sAFT-JM full run; part 1/4; tasks 1-938"
 echo "Output directory: $SIM_OUTPUT_DIR"
 echo "SLURM .out directory: $JOB_OUTPUT_DIR"
 
