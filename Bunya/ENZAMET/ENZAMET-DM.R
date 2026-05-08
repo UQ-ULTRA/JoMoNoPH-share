@@ -1125,8 +1125,8 @@ config_grid <- config_grid[order(
 ), ]
 row.names(config_grid) <- NULL
 
-# Full run: 1000 replicates per config, split into 100 batches of 10.
-batch_size <- 10
+# Full run: 1000 replicates per config, split into 250 batches of 4.
+batch_size <- 4
 sims_per_config <- 1000
 batches_per_config <- sims_per_config / batch_size
 

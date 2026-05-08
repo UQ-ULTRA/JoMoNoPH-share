@@ -3,12 +3,12 @@
 #SBATCH --ntasks=1
 ##SBATCH --nodelist=bun[083-115,126-143]
 #SBATCH --exclude=bun091
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=16
 ## change to 40 for larger simulation
-#SBATCH --array=1-3000%50
+#SBATCH --array=1-7500%100
 #SBATCH --mem=10GB
 ## change to 40GB for larger simulation
-#SBATCH --time=06:00:00
+#SBATCH --time=02:00:00
 ## change to 8 for larger simulation
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr
