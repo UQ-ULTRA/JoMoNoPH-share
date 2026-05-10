@@ -1177,14 +1177,9 @@ config_id, config_hash, n_patients, lambda_c, baseline_label, aft_mode, k_bases,
 # ---- Skip work if this batch output already exists ----
 output_dir <- Sys.getenv("SIM_OUTPUT_DIR", unset = "")
 if (!nzchar(output_dir)) {
-  output_date <- Sys.getenv("SIM_OUTPUT_DATE", unset = format(Sys.Date(), "%Y%m%d"))
-  output_job_id <- Sys.getenv(
-    "SLURM_ARRAY_JOB_ID",
-    unset = Sys.getenv("SLURM_JOB_ID", unset = "local")
-  )
   output_dir <- file.path(
     "~/JoMoNoPH-share/Bunya/ENZAMET",
-    paste0("output_", output_date, "_", output_job_id)
+    "output"
   )
 }
 output_dir <- path.expand(output_dir)

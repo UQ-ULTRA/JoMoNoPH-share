@@ -8,7 +8,7 @@
 #SBATCH --array=1-1000%100
 #SBATCH --mem=10GB
 ## change to 40GB for larger simulation
-#SBATCH --time=02:00:00
+#SBATCH --time=05:00:00
 ## change to 8 for larger simulation
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr
@@ -33,7 +33,7 @@ export MKL_NUM_THREADS=1
 export SLURM_ARRAY_TASK_OFFSET=0
 export SIM_OUTPUT_DATE="$JOB_OUTPUT_DATE"
 export SIM_OUTPUT_JOB_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
-export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output_${SIM_OUTPUT_DATE}_${SIM_OUTPUT_JOB_ID}"
+export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output"
 mkdir -p "$SIM_OUTPUT_DIR"
 
 echo "SLURM Job ID: $SLURM_JOB_ID"
