@@ -68,6 +68,14 @@ library(ggplot2)
 library(MASS)
 library(simsurv)
 
+# Source-safe defaults: ENZAMET-DM.R can set these before sourcing this file.
+.set_default_if_missing <- function(name, value) {
+  env <- parent.frame()
+  if (!exists(name, envir = env, inherits = FALSE)) {
+    assign(name, value, envir = env)
+  }
+}
+
 # Longitudinal model
 # Fixed effects
 beta_0 <- 73       # Baseline HRQoL at time 0
@@ -90,8 +98,8 @@ D <- matrix(c(sigma_0^2, sigma_01, sigma_01, sigma_1^2), 2, 2)
 # Old Bernstein Polynomial approximation:
 # loglogistic_shape <- 1.75
 # loglogistic_scale <- 12.0
-loglogistic_shape <- 1.20
-loglogistic_scale <- 23.0
+.set_default_if_missing("loglogistic_shape", 1.20)
+.set_default_if_missing("loglogistic_scale", 23.0)
 
 # Baseline and treatment effects on log-hazard scale
 log_baseline_hazard <- 99          # Baseline log-hazard (intercept)
@@ -106,7 +114,7 @@ log_HR <- 99                      # Log hazard ratio for treatment (HR = exp(log
 # weibull_shape <- 2.10  # with weibull_scale <- 38.0
 # weibull_shape <- 0.90  # with weibull_scale <- 38.0
 # weibull_shape <- 0.40  # with weibull_scale <- 38.0
-weibull_shape <- 0.70  # default JM calibration setting; ENZAMET-DM.R overrides this per baseline
+.set_default_if_missing("weibull_shape", 0.70)  # default JM calibration setting; ENZAMET-DM.R overrides this per baseline
 # weibull_shape <- 4.20  # previous AFT-only stress-test setting
 
 # Convert baseline log-hazard to hazard rate (λ)
@@ -115,7 +123,7 @@ baseline_hazard_rate <- exp(log_baseline_hazard)  # Used as λ in simsurv
 # Convert to Weibull scale parameter for use in rweibull/survreg
 # Old Bernstein Polynomial approximation:
 # weibull_scale <- 13.823
-weibull_scale <- 38.0
+.set_default_if_missing("weibull_scale", 38.0)
 
 # Compute acceleration factor (AF) under Weibull interpretation
 log_AF <- -log_HR / weibull_shape
@@ -133,12 +141,12 @@ alpha_AFT <- 0.012
 
 
 # Study design
-visit <- c(0, 1, seq(3, 92, 3))
-jitter_time <- c(0, .25, rep(.5, length(visit)-2))
+.set_default_if_missing("visit", c(0, 1, seq(3, 92, 3)))
+.set_default_if_missing("jitter_time", c(0, .25, rep(.5, length(visit)-2)))
 
 
-n_patients <- 1100
-max_FU <- 72  # maximum follow-up
+.set_default_if_missing("n_patients", 1100)
+.set_default_if_missing("max_FU", 72)  # default maximum follow-up
 
 
 # ============================================================

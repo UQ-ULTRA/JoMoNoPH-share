@@ -504,6 +504,24 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
                            cfg_weibull_scale,
                            cfg_loglogistic_shape,
                            cfg_loglogistic_scale) {
+  # Force config values before sourcing scenario files. R function arguments are
+  # lazy; without this, same-named assignments inside sourced data generators can
+  # change the values actually used by the simulation.
+  force(i)
+  force(n_patients)
+  force(lambda_c)
+  force(aft_mode)
+  force(max_FU)
+  force(config_hash)
+  force(joint_model_type)
+  force(k_bases)
+  force(scenario)
+  force(baseline_label)
+  force(cfg_weibull_shape)
+  force(cfg_weibull_scale)
+  force(cfg_loglogistic_shape)
+  force(cfg_loglogistic_scale)
+
   set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
   
   # Load the appropriate ENZAMET data generator for this scenario
