@@ -1194,9 +1194,23 @@ out_file <- sprintf(
 )
 out_file <- file.path(output_dir, out_file)
 
-if (file.exists(out_file)) {
-  message(sprintf("SKIP: output already exists for this batch: %s", out_file))
+batch_output_complete <- function(path, expected_n) {
+  if (!file.exists(path)) return(FALSE)
+  
+  existing <- tryCatch(readRDS(path), error = function(e) {
+    message(sprintf("Existing output could not be read and will be regenerated: %s", e$message))
+    NULL
+  })
+  if (!is.list(existing) || length(existing) != expected_n) return(FALSE)
+  !any(vapply(existing, is.null, logical(1)))
+}
+
+if (batch_output_complete(out_file, length(trial_ids))) {
+  message(sprintf("SKIP: complete output already exists for this batch: %s", out_file))
   quit(save = "no", status = 0)
+}
+if (file.exists(out_file)) {
+  message(sprintf("RERUN: existing output is incomplete and will be overwritten: %s", out_file))
 }
 # -------------------------------------------------------
 
@@ -1217,7 +1231,7 @@ workers <- min(workers, length(trial_ids))
 # Set up parallel backend
 plan(multisession, workers = workers)
 
-safe_elapsed <- 10200  # 2 hours 50 minutes per trial; leaves buffer inside 6-hour batches
+safe_elapsed <- 14400  # 4 hours per trial; rescue jobs request enough walltime for two waves
 
 results <- future_map(
   trial_ids,

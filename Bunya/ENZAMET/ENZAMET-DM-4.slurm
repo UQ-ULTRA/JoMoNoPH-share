@@ -4,7 +4,7 @@
 ##SBATCH --nodelist=bun[083-115,126-143]
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=16
-#SBATCH --array=1-937%100
+#SBATCH --array=1-937
 #SBATCH --mem=10GB
 #SBATCH --time=05:00:00
 #SBATCH --partition=general
@@ -14,8 +14,18 @@
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
-export JOB_OUTPUT_DATE="$(date +%Y%m%d)"
 export JOB_OUTPUT_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
+JOB_OUTPUT_DATE_FILE="$HOME/JoMoNoPH-share/Bunya/ENZAMET/.out_date_${JOB_OUTPUT_ID}"
+JOB_OUTPUT_DATE_LOCK="${JOB_OUTPUT_DATE_FILE}.lock"
+if [ ! -s "$JOB_OUTPUT_DATE_FILE" ]; then
+  if mkdir "$JOB_OUTPUT_DATE_LOCK" 2>/dev/null; then
+    date +%Y%m%d > "$JOB_OUTPUT_DATE_FILE"
+    rmdir "$JOB_OUTPUT_DATE_LOCK"
+  else
+    while [ ! -s "$JOB_OUTPUT_DATE_FILE" ]; do sleep 1; done
+  fi
+fi
+export JOB_OUTPUT_DATE="$(cat "$JOB_OUTPUT_DATE_FILE")"
 export JOB_OUTPUT_DIR="$HOME/out_${JOB_OUTPUT_DATE}_${JOB_OUTPUT_ID}"
 export JOB_OUTPUT_TASK_SUFFIX="${SLURM_ARRAY_TASK_ID:+_${SLURM_ARRAY_TASK_ID}}"
 mkdir -p "$JOB_OUTPUT_DIR"

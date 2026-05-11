@@ -1,0 +1,61 @@
+#!/bin/bash -l
+# Andrew P1 rescue run.
+# Reruns the latest P1 walltime failures from job 24437798 plus batches with
+# the old 170-minute R internal elapsed-time-limit signature.
+# ENZAMET-DM.R skips complete .rds files and overwrites incomplete/NULL ones.
+# Local array IDs use offset 0, mapping to global tasks 1-938.
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+##SBATCH --nodelist=bun[083-115,126-143]
+#SBATCH --exclude=bun091
+#SBATCH --cpus-per-task=16
+#SBATCH --array=22,28,40,44,46,49,51,52,54,60,77,85,87,89,107,125,126,128,130,134,140,146,148,149,152,158,161,162,163,168,169,171,173,175,178,179,182,183,185,187,188,189,192,193,194,198,199,205,208,210,215,216,217,218,219,220,222,226,233,235,237,239,241,242,243,250,251,252,254,255,260,263,265,269,271,272,277,280,281,288,291,295,299,302,306,307,310,324,327,328,329,333,336,337,339,340,346,349,355,357,361,362,365,372,375,376,377,378,379,381,383,386,391,395,398,402,403,406,413,416,417,423,424,425,426,427,428,431,433,435,436,437,438,439,440,443,444,447,451,456,457,458,459,464,468,469,472,479,481,482,483,484,487,490,492,493,494,495,497,500,501,511,513,514,515,523,525,529,530,531,535,536,541,555,557,565,585,603,604,605,606,609,612,620,621,635,638,640,642,643,644,645,646,647,648,649,650,652,653,664,666,667,670,672,676,677,678,679,686,687,688,692,696,697,698,699,700,701,704,705,706,710,711,714,715,720,724,729,735,737,738,743,746,747,778,876,895,919
+#SBATCH --mem=10GB
+#SBATCH --time=09:00:00
+#SBATCH --partition=general
+#SBATCH --account=a_uqccr
+##SBATCH --reservation=ding_diag
+#SBATCH --job-name=ENZAMET-P1R
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
+
+export JOB_OUTPUT_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
+JOB_OUTPUT_DATE_FILE="$HOME/JoMoNoPH-share/Bunya/ENZAMET/.out_date_${JOB_OUTPUT_ID}"
+JOB_OUTPUT_DATE_LOCK="${JOB_OUTPUT_DATE_FILE}.lock"
+if [ ! -s "$JOB_OUTPUT_DATE_FILE" ]; then
+  if mkdir "$JOB_OUTPUT_DATE_LOCK" 2>/dev/null; then
+    date +%Y%m%d > "$JOB_OUTPUT_DATE_FILE"
+    rmdir "$JOB_OUTPUT_DATE_LOCK"
+  else
+    while [ ! -s "$JOB_OUTPUT_DATE_FILE" ]; do sleep 1; done
+  fi
+fi
+export JOB_OUTPUT_DATE="$(cat "$JOB_OUTPUT_DATE_FILE")"
+export JOB_OUTPUT_DIR="$HOME/out_${JOB_OUTPUT_DATE}_${JOB_OUTPUT_ID}"
+export JOB_OUTPUT_TASK_SUFFIX="${SLURM_ARRAY_TASK_ID:+_${SLURM_ARRAY_TASK_ID}}"
+mkdir -p "$JOB_OUTPUT_DIR"
+exec > "$JOB_OUTPUT_DIR/${SLURM_JOB_NAME}_${JOB_OUTPUT_ID}${JOB_OUTPUT_TASK_SUFFIX}.out" 2>&1
+
+module purge
+module load r/4.4.0-gfbf-2023a
+
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export SLURM_ARRAY_TASK_OFFSET=0
+export SIM_OUTPUT_DATE="$JOB_OUTPUT_DATE"
+export SIM_OUTPUT_JOB_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
+export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output"
+mkdir -p "$SIM_OUTPUT_DIR"
+
+echo "SLURM Job ID: $SLURM_JOB_ID"
+echo "SLURM Array Job ID: ${SLURM_ARRAY_JOB_ID:-NA}"
+echo "Array Task ID: $SLURM_ARRAY_TASK_ID"
+echo "Array Task Offset: $SLURM_ARRAY_TASK_OFFSET"
+echo "Host: $(hostname)"
+echo "CPUs per task: $SLURM_CPUS_PER_TASK"
+echo "Model: BP sAFT-JM rescue run; Andrew part 1/4"
+echo "Output directory: $SIM_OUTPUT_DIR"
+echo "SLURM .out directory: $JOB_OUTPUT_DIR"
+
+srun --cpu-bind=cores Rscript ~/JoMoNoPH-share/Bunya/ENZAMET/ENZAMET-DM.R
