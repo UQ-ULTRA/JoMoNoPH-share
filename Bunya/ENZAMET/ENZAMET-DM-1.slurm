@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --array=1-938
 #SBATCH --mem=10GB
-#SBATCH --time=05:00:00
+#SBATCH --time=06:00:00
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr
 ##SBATCH --reservation=ding_diag
