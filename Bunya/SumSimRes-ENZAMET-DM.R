@@ -48,8 +48,8 @@ rm(list=ls())
 # Example: models_to_plot <- c("BP", "GP")  # for BP and GP
 #          models_to_plot <- c("BP", "GB")  # for BP and GB
 # models_to_plot <- c("BP")  # <-- CHANGE THIS to select models
-models_to_plot <- c("BP_aft")
-distributions_to_analyse <- c("Weibull") # use c("Weibull", "loglogistic") to analyse both
+models_to_plot <- c("BP")
+distributions_to_analyse <- c("Weibull", "loglogistic") # use c("Weibull", "loglogistic") to analyse both
 distribution_pattern <- paste(distributions_to_analyse, collapse = "|")
 # =============================================================================
 
@@ -72,7 +72,7 @@ if (has_aft_only_models && !all_models_are_aft_only) {
 ##########
 
 bunya <- FALSE
-analysis_output_dir <- "" # Set manually to pin one run; empty means use newest output_* folder.
+analysis_output_dir <- here::here("Bunya", "ENZAMET", "output") # Set manually to pin one run; empty means use newest output_* folder.
 
 find_latest_output_dir <- function(base_dir) {
   output_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)
@@ -147,12 +147,100 @@ format_cens_table <- function(cens) {
   )
 }
 
+parse_baseline_label <- function(label) {
+  label <- as.character(label)
+
+  if (tolower(label) == "weibull") {
+    return(list(
+      baseline_label = label,
+      dist = "Weibull",
+      dist_short = "W",
+      baseline_shape = NA_real_,
+      baseline_scale = NA_real_
+    ))
+  }
+
+  if (tolower(label) == "loglogistic") {
+    return(list(
+      baseline_label = label,
+      dist = "loglogistic",
+      dist_short = "LL",
+      baseline_shape = NA_real_,
+      baseline_scale = NA_real_
+    ))
+  }
+
+  w <- stringr::str_match(label, "^W([0-9]+)_([0-9]+)$")
+  if (!is.na(w[1, 1])) {
+    shape <- as.numeric(w[1, 2]) / 100
+    scale <- as.numeric(w[1, 3]) / 10
+    return(list(
+      baseline_label = label,
+      dist = "Weibull",
+      dist_short = sprintf("W%.2f", shape),
+      baseline_shape = shape,
+      baseline_scale = scale
+    ))
+  }
+
+  ll <- stringr::str_match(label, "^LL([0-9]+)_([0-9]+)$")
+  if (!is.na(ll[1, 1])) {
+    shape <- as.numeric(ll[1, 2]) / 100
+    scale <- as.numeric(ll[1, 3]) / 10
+    return(list(
+      baseline_label = label,
+      dist = "loglogistic",
+      dist_short = sprintf("LL%.2f", shape),
+      baseline_shape = shape,
+      baseline_scale = scale
+    ))
+  }
+
+  list(
+    baseline_label = label,
+    dist = label,
+    dist_short = label,
+    baseline_shape = NA_real_,
+    baseline_scale = NA_real_
+  )
+}
+
+truth_values_for_scenario <- function(scenario, aft_only = FALSE) {
+  stopifnot(scenario %in% 1:5)
+
+  if (aft_only) {
+    return(c(
+      "beta_long[1]" = 0,
+      "beta_long[2]" = 0,
+      "beta_long[3]" = c(0, 0, 0, 0, 0)[scenario],
+      "sd_1_long[1]" = 0,
+      "sd_1_long[2]" = 0,
+      "sigma_long" = 0,
+      "alpha" = 0,
+      "beta_surv[1]" = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]
+    ))
+  }
+
+  c(
+    "beta_long[1]" = 73,
+    "beta_long[2]" = -0.04,
+    "beta_long[3]" = c(0.00, 0.04, -0.04, 0.04, -0.04)[scenario],
+    "sd_1_long[1]" = 15,
+    "sd_1_long[2]" = 0.20,
+    "sigma_long" = 12,
+    "alpha" = 0.012,
+    "beta_surv[1]" = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]
+  )
+}
+
+summary_variable_pattern <- "alpha|beta_|sigma_long|sd_1_long|gamma\\[|gp_length_scale|gp_marginal_sd|f_gp"
+
 # --- Helper: make short, readable labels for facets/plots
 shorten_config <- function(cfg) {
   # Updated pattern to handle BP, GB, GB_Quantile, GP and scenario
   parts <- stringr::str_match(
     cfg,
-    "^([A-Za-z_]+)_k(\\d+)_n(\\d+)_cens([A-Za-z0-9]+)_([A-Za-z]+)_scen(\\d+)_?(FU\\d+)?$"
+    "^([A-Za-z_]+)_k(\\d+)_n(\\d+)_cens([A-Za-z0-9]+)_([A-Za-z0-9_]+)_scen(\\d+)_?(FU\\d+)?$"
   )
   if (is.na(parts[1, 1])) return(cfg)
   
@@ -160,12 +248,8 @@ shorten_config <- function(cfg) {
   k    <- parts[3]
   n    <- parts[4]
   cens <- parts[5]
-  dist <- parts[6]
-  dist_short <- dplyr::case_when(
-    tolower(dist) == "weibull" ~ "W",
-    tolower(dist) == "loglogistic" ~ "LL",
-    TRUE ~ dist
-  )
+  baseline <- parse_baseline_label(parts[6])
+  dist_short <- baseline$dist_short
   scen <- parts[7]
   
   paste0(bf, " k=", k, ", c=", format_cens_short(cens), ", d=", dist_short, ", S", scen)
@@ -175,37 +259,52 @@ shorten_config <- function(cfg) {
 # Function to parse a config string 
 parse_config <- function(config_str) {
   # Updated pattern to handle BP, GB, GB_Quantile, GP and scenario
-  parts <- stringr::str_match(config_str, "^([A-Za-z_]+)_k(\\d+)_n(\\d+)_cens([A-Za-z0-9]+)_([A-Za-z]+)_scen(\\d+)_?(FU\\d+)?$")
+  parts <- stringr::str_match(config_str, "^([A-Za-z_]+)_k(\\d+)_n(\\d+)_cens([A-Za-z0-9]+)_([A-Za-z0-9_]+)_scen(\\d+)_?(FU\\d+)?$")
   
   if (is.na(parts[1, 1])) return(NULL)
+  baseline <- parse_baseline_label(parts[6])
   
   list(
     bf = parts[2],
     k_bases = as.numeric(parts[3]),
     n = as.numeric(parts[4]),
     cens = parts[5],
-    dist = parts[6],
+    baseline_label = baseline$baseline_label,
+    dist = baseline$dist,
+    dist_short = baseline$dist_short,
+    baseline_shape = baseline$baseline_shape,
+    baseline_scale = baseline$baseline_scale,
     scenario = as.numeric(parts[7]),
     fu = parts[8]
   )
 }
 
 parse_short_config <- function(lbl) {
-  m <- stringr::str_match(lbl, "^([A-Za-z_]+)\\s+k=(\\d+),\\s+c=([A-Za-z0-9]+)%?(?:,\\s+d=([A-Za-z]+))?,\\s+S(\\d+)$")
+  m <- stringr::str_match(lbl, "^([A-Za-z_]+)\\s+k=(\\d+),\\s+c=([A-Za-z0-9]+)%?(?:,\\s+d=([^,]+))?,\\s+S(\\d+)$")
   if (is.na(m[1,1])) {
     return(tibble::tibble(
       bf = NA_character_,
       k_bases = NA_real_,
       cens = NA_character_,
+      baseline_label = NA_character_,
       dist = NA_character_,
+      dist_short = NA_character_,
       scenario = NA_real_
     ))
   }
+  dist_token <- m[1,5]
+  dist <- dplyr::case_when(
+    stringr::str_detect(dist_token, "^W") ~ "Weibull",
+    stringr::str_detect(dist_token, "^LL") ~ "loglogistic",
+    TRUE ~ dist_token
+  )
   tibble::tibble(
     bf       = m[1,2],
     k_bases  = as.numeric(m[1,3]),
     cens     = m[1,4],
-    dist     = m[1,5],
+    baseline_label = dist_token,
+    dist     = dist,
+    dist_short = dist_token,
     scenario = as.numeric(m[1,6])
   )
 }
@@ -220,7 +319,7 @@ parse_short_config <- function(lbl) {
 # from Bayesian joint modelling runs
 
 # --- Main: process all sims for a single config
-process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
+process_simulation_results <- function(bf, k_bases, n, cens, baseline_label, dist, scenario, fu,
                                        output_dir) {
   
   # Build filename pattern for this config
@@ -231,7 +330,7 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
   }
   
   pattern <- paste0(
-    bf, "_k", k_bases, "_n", n, "_cens", cens, "_", dist,
+    bf, "_k", k_bases, "_n", n, "_cens", cens, "_", baseline_label,
     "_scen", scenario,
     fu_part,
     "(?:_.*)?_batch\\d{3}\\.rds$"
@@ -247,14 +346,55 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
   }
   # browser()
   # ---- Read all batches; flatten to one list of sims; drop NULLs (timeouts/failures)
-  sims <- rds_files %>%
+  raw_sims <- rds_files %>%
     purrr::map(readRDS) %>%
-    purrr::flatten() %>%
-    purrr::compact()
+    purrr::flatten()
+  n_raw_sims <- length(raw_sims)
+  n_failed_sims <- sum(vapply(raw_sims, is.null, logical(1)))
+  sims <- purrr::compact(raw_sims)
   
   if (length(sims) == 0) {
     message("All simulations were NULL/failed for: ", pattern)
-    return(NULL)
+    empty_summary <- tibble::tibble(
+      variable = character(), truth = numeric(), mean = numeric(), median = numeric(),
+      empirical_sd = numeric(), mean_post_sd = numeric(), sd = numeric(),
+      bias = numeric(), rmse = numeric(), mean_ci_width = numeric(),
+      coverage = numeric(), mcse_mean = numeric(), mcse_coverage = numeric(),
+      n_sims = integer(), source = character()
+    )
+    empty_filtered_data <- tibble::tibble(
+      variable = character(), mean = numeric(), median = numeric(), sd = numeric(),
+      q2.5 = numeric(), q97.5 = numeric(), rhat = numeric(), sim_id = integer()
+    )
+    empty_diag_per_sim <- tibble::tibble(
+      sim_id = integer(), censor_prop = numeric(), unique_seed = numeric(),
+      max_rhat = numeric(), mean_rhat = numeric(), median_rhat = numeric(),
+      sd_rhat = numeric(), n_rhat_gt_1_01 = numeric(), n_rhat_gt_1_05 = numeric()
+    )
+    return(list(
+      fig           = NULL,
+      table         = NULL,
+      filtered_data = empty_filtered_data,
+      summary       = empty_summary,
+      diag_per_sim  = empty_diag_per_sim,
+      diag_summary  = tibble::tibble(
+        mean_censor_prop = NA_real_,
+        sd_censor_prop   = NA_real_,
+        mean_max_rhat    = NA_real_,
+        max_max_rhat     = NA_real_,
+        mean_mean_rhat   = NA_real_,
+        mean_median_rhat = NA_real_,
+        mean_n_rhat_gt_1_01 = NA_real_,
+        mean_n_rhat_gt_1_05 = NA_real_,
+        n_sims = 0L,
+        n_batch_files = length(rds_files),
+        n_raw_sims = n_raw_sims,
+        n_failed_sims = n_failed_sims,
+        n_valid_sims = 0L
+      ),
+      beta_saft_raw     = NULL,
+      beta_saft_summary = NULL
+    ))
   }
   
   # ---- Aggregate Stan summaries (keep parameter names + sim id)
@@ -266,6 +406,9 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
       if (is.null(s)) return(NULL)
       
       s_df <- as.data.frame(s)
+      if (nrow(s_df) == 0) return(NULL)
+      s_df <- s_df %>%
+        dplyr::filter(stringr::str_detect(variable, summary_variable_pattern))
       if (nrow(s_df) == 0) return(NULL)
       
       # joint_summary already has a variable column, don't add it again
@@ -376,16 +519,22 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
       mean_n_rhat_gt_1_01 = mean(n_rhat_gt_1_01),
       mean_n_rhat_gt_1_05 = mean(n_rhat_gt_1_05),
       
-      n_sims = n()
+      n_sims = n(),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      n_batch_files = length(rds_files),
+      n_raw_sims = n_raw_sims,
+      n_failed_sims = n_failed_sims,
+      n_valid_sims = length(sims)
     )
   
   
   # Filter parameters of interest (including GP-specific parameters)
-  filtered_data <- all_summaries %>%
-    dplyr::filter(stringr::str_detect(variable, "rho|alpha|beta_|sigma_long|sd_1_long|gamma|sigma|gp_length_scale|gp_marginal_sd|f_gp"))
+  filtered_data <- all_summaries
   
-  message("Total simulations found for ", bf, "_n", n, "_cens", cens, "_", dist, "_scen", scenario, "_", fu,
-          ": N=", length(unique(filtered_data$sim_id)))
+  message("Total simulations found for ", bf, "_n", n, "_cens", cens, "_", baseline_label, "_scen", scenario, "_", fu,
+          ": valid N=", length(unique(filtered_data$sim_id)), ", failed/null=", n_failed_sims)
   
   # Quick histogram per parameter (diagnostic)
   fig_hist <- ggplot2::ggplot(filtered_data, ggplot2::aes(x = mean)) +
@@ -405,37 +554,7 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
   # Scenario 4: beta_2 = 0.04, log_AF = -0.90
   # Scenario 5: beta_2 = -0.04, log_AF = -0.90
   #### TRUE VALUES (scenarios 1–5 only), from supplied true_params ####
-  stopifnot(scenario %in% 1:5)
-  
-  if (all_models_are_aft_only) {
-    true_values <- c(
-      "beta_long[1]"  = 0,     # beta_0
-      "beta_long[2]"  = 0,  # beta_1
-      "beta_long[3]"  = c(0, 0, 0, 0, 0)[scenario],  # beta_2 (scen 1–5)
-      
-      "sd_1_long[1]"  = 0,     # sigma_b0
-      "sd_1_long[2]"  = 0,    # sigma_b1
-      "sigma_long"    = 0,     # sigma_epsilon
-      
-      # "alpha"         = 0.012,  # alpha (scen 1–5)
-      "alpha"         = 0,      # try no association 20260113
-      "beta_surv[1]"  = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]   # gamma_1 (scen 1–5)
-    )
-  } else {
-    true_values <- c(
-      "beta_long[1]"  = 73,     # beta_0
-      "beta_long[2]"  = -0.04,  # beta_1
-      "beta_long[3]"  = c(0.00, 0.04, -0.04, 0.04, -0.04)[scenario],  # beta_2 (scen 1–5)
-      
-      "sd_1_long[1]"  = 15,     # sigma_b0
-      "sd_1_long[2]"  = 0.2,    # sigma_b1
-      "sigma_long"    = 12,     # sigma_epsilon
-      
-      # "alpha"         = 0.012,  # alpha (scen 1–5)
-      "alpha"         = 0,      # try no association 20260113
-      "beta_surv[1]"  = c(0.00, 0.90, 0.90, -0.90, -0.90)[scenario]   # gamma_1 (scen 1–5)
-    ) 
-  }
+  true_values <- truth_values_for_scenario(scenario, aft_only = all_models_are_aft_only)
   
   # Compute coverage: check if true value is within [q2.5, q97.5] for each sim
   coverage_data <- filtered_data %>%
@@ -451,37 +570,66 @@ process_simulation_results <- function(bf, k_bases, n, cens, dist, scenario, fu,
       .groups = "drop"
     )
   
-  # Posterior summary across sims
+  # Simulation summary across replicates.
+  # CP is based on each replicate's posterior 95% credible interval.
   post_summary <- filtered_data %>%
+    dplyr::mutate(
+      posterior_mean = .data$mean,
+      posterior_sd = .data$sd,
+      truth = unname(true_values[variable]),
+      error = posterior_mean - truth,
+      covered = dplyr::if_else(
+        !is.na(truth),
+        q2.5 <= truth & truth <= q97.5,
+        NA
+      ),
+      ci_width = q97.5 - q2.5
+    ) %>%
     dplyr::group_by(variable) %>%
     dplyr::summarise(
-      mean      = mean(mean, na.rm = TRUE),
-      median    = median(mean, na.rm = TRUE),
-      sd        = mean(sd, na.rm = TRUE),  # Average posterior SD across sims
+      truth = dplyr::first(stats::na.omit(truth), default = NA_real_),
+      n_sims = sum(!is.na(.data$posterior_mean)),
+      mean = mean(.data$posterior_mean, na.rm = TRUE),
+      median = median(.data$posterior_mean, na.rm = TRUE),
+      empirical_sd = sd(.data$posterior_mean, na.rm = TRUE),
+      mean_post_sd = mean(.data$posterior_sd, na.rm = TRUE),
+      sd = mean_post_sd,  # legacy alias for older downstream code
+      q2.5_est = stats::quantile(.data$posterior_mean, 0.025, na.rm = TRUE),
+      q97.5_est = stats::quantile(.data$posterior_mean, 0.975, na.rm = TRUE),
+      bias = mean(error, na.rm = TRUE),
+      rmse = sqrt(mean(error^2, na.rm = TRUE)),
+      mean_ci_width = mean(ci_width, na.rm = TRUE),
+      coverage = mean(covered, na.rm = TRUE),
+      mcse_mean = empirical_sd / sqrt(n_sims),
+      mcse_coverage = sqrt(coverage * (1 - coverage) / n_sims),
       .groups = "drop"
     ) %>%
-    dplyr::mutate(source = "Stan posterior") %>%
-    dplyr::left_join(coverage_data, by = "variable")
+    dplyr::mutate(source = "Stan posterior")
   
   # ENZAMET files don't have LMM - skip LMM processing
   
   # Combined summary is just Stan posterior
   combined_summary <- post_summary %>%
-    dplyr::select(variable, mean, sd, source, coverage, n_sims) %>%
+    dplyr::select(
+      variable, truth, mean, median, empirical_sd, mean_post_sd, sd,
+      bias, rmse, mean_ci_width, coverage, mcse_mean, mcse_coverage, n_sims, source
+    ) %>%
     dplyr::arrange(source, variable)
   
   # Flextable: rounded values + simple header
   table <- combined_summary %>%
     dplyr::mutate(
       mean = round(mean, 3),
-      sd   = round(sd, 3),
-      coverage = round(coverage, 3)
+      empirical_sd = round(empirical_sd, 3),
+      mean_post_sd = round(mean_post_sd, 3),
+      bias = round(bias, 3),
+      rmse = round(rmse, 3),
+      mean_ci_width = round(mean_ci_width, 3),
+      coverage = round(coverage, 3),
+      mcse_mean = round(mcse_mean, 3),
+      mcse_coverage = round(mcse_coverage, 3)
     ) %>%
     flextable::flextable() %>%
-    flextable::add_header_row(
-      values   = c("Variable", "Mean", "SD", "Source", "Coverage", "N Sims"),
-      colwidths = c(1, 1, 1, 1, 1, 1)
-    ) %>%
     flextable::align(j = "source", align = "left")
   
   list(
@@ -513,7 +661,9 @@ configs <- substr(tools::file_path_sans_ext(filenames),
 configs <- configs[
   purrr::map_lgl(configs, function(cfg) {
     cfg_parsed <- parse_config(cfg)
-    !is.null(cfg_parsed) && cfg_parsed$dist %in% distributions_to_analyse
+    !is.null(cfg_parsed) &&
+      cfg_parsed$bf %in% models_to_plot &&
+      cfg_parsed$dist %in% distributions_to_analyse
   })
 ]
 
@@ -544,6 +694,7 @@ results_by_config <- purrr::compact(
         k_bases = cfg_parsed$k_bases,
         n       = cfg_parsed$n,
         cens    = cfg_parsed$cens,
+        baseline_label = cfg_parsed$baseline_label,
         dist    = cfg_parsed$dist,
         scenario = cfg_parsed$scenario,
         fu      = cfg_parsed$fu,
@@ -558,7 +709,9 @@ config_info_full <- if (length(results_by_config) > 0) {
     tidyr::unnest_wider(parsed)
 } else {
   tibble::tibble(config = character(), bf = character(), k_bases = numeric(),
-                 n = numeric(), cens = character(), dist = character(),
+                 n = numeric(), cens = character(), baseline_label = character(),
+                 dist = character(), dist_short = character(),
+                 baseline_shape = numeric(), baseline_scale = numeric(),
                  scenario = numeric(), fu = character())
 }
 config_info <- config_info_full
@@ -581,6 +734,15 @@ all_diag_summary
 # mean_n_rhat_gt_1_01 column: mean number of r_hat's greater than 1.01
 # mean_n_rhat_gt_1_05 column: mean number of r_hat's greater than 1.05
 
+readr::write_csv(
+  all_diag_summary,
+  file.path(summary_dir, paste0("jm_diagnostic_summary_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_diag_summary,
+  file.path(summary_dir, paste0("jm_diagnostic_summary_", analysis_dist_file, ".rds"))
+)
+
 # diagnostic plot: boxplot of max R-hat per config
 # long form, useful for boxplots of max_rhat or realised censoring
 all_diag_per_sim <- purrr::map2_dfr(
@@ -589,20 +751,22 @@ all_diag_per_sim <- purrr::map2_dfr(
   ~ dplyr::mutate(.x$diag_per_sim, config = .y)
 )
 
+readr::write_csv(
+  all_diag_per_sim,
+  file.path(summary_dir, paste0("jm_diagnostic_per_sim_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_diag_per_sim,
+  file.path(summary_dir, paste0("jm_diagnostic_per_sim_", analysis_dist_file, ".rds"))
+)
+
 shorten_config_1 <- function(config) {
-  
-  tibble::tibble(config = config) %>%
-    dplyr::mutate(
-      model = stringr::str_replace(config, "_k\\d+.*$", ""),
-      k     = stringr::str_extract(config, "k\\d+"),
-      n     = stringr::str_extract(config, "n\\d+"),
-      dist  = stringr::str_extract(config, "Weibull|loglogistic"),
-      FU    = stringr::str_extract(config, "FU\\d+")
-    ) %>%
-    dplyr::mutate(
-      label = paste(model, k, n, dist, FU, sep = ", ")
-    ) %>%
-    dplyr::pull(label)
+  purrr::map_chr(config, function(cfg) {
+    parsed <- parse_config(cfg)
+    if (is.null(parsed)) return(cfg)
+    paste(parsed$bf, paste0("k", parsed$k_bases), paste0("n", parsed$n),
+          parsed$dist_short, parsed$fu, sep = ", ")
+  })
 }
 all_diag_per_sim <- all_diag_per_sim %>%
   dplyr::mutate(cfg_short = shorten_config_1(config))
@@ -638,14 +802,19 @@ all_summary_tables <- purrr::map2_dfr(
 )
 print(all_summary_tables, n = nrow(all_summary_tables))
 
+readr::write_csv(
+  all_summary_tables,
+  file.path(summary_dir, paste0("jm_parameter_summary_long_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_summary_tables,
+  file.path(summary_dir, paste0("jm_parameter_summary_long_", analysis_dist_file, ".rds"))
+)
+
 # Wider view (mean/sd columns per config)
 if (nrow(all_summary_tables) > 0 && any(c("mean", "sd") %in% colnames(all_summary_tables))) {
   summary_wide <- all_summary_tables %>%
-    # Filter to selected BP configurations and the distribution(s) requested above.
-    dplyr::filter(
-      stringr::str_detect(config, "^BP_"),
-      stringr::str_detect(config, paste0("_(", distribution_pattern, ")_"))
-    ) %>%
+    dplyr::filter(config %in% config_info_full$config) %>%
     tidyr::pivot_longer(cols = dplyr::any_of(c("mean", "sd")), names_to = "stat", values_to = "value") %>%
     tidyr::unite("config_stat", config, stat) %>%
     tidyr::pivot_wider(names_from = config_stat, values_from = value)
@@ -674,8 +843,7 @@ if (all_models_are_aft_only) {
     variable = c("beta_long[1]","beta_long[2]","beta_long[3]",
                  "sd_1_long[1]","sd_1_long[2]","sigma_long",
                  "beta_surv[1]","alpha"),
-    # reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0.012)
-    reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0) # try no association 20260113
+    reference = c(73, -0.04, NA, 15, 0.20, 12, NA, 0.012)
   )
 }
 
@@ -690,32 +858,8 @@ if (nrow(all_summary_tables) > 0) {
     dplyr::left_join(config_info, by = "config") %>%
     left_join(reference_lines, by = "variable") %>%
     mutate(
-      # Update scenario-specific true values
-      reference = case_when(
-        variable == "beta_long[3]" & scenario == 1 ~ 0.00,
-        variable == "beta_long[3]" & scenario == 2 ~ 0.04,
-        variable == "beta_long[3]" & scenario == 3 ~ -0.04,
-        # variable == "beta_long[3]" & scenario == 4 ~ 0.08,
-        variable == "beta_long[3]" & scenario == 4 ~ 0.04,
-        # variable == "beta_long[3]" & scenario == 5 ~ -0.08,
-        variable == "beta_long[3]" & scenario == 5 ~ -0.04,
-        variable == "beta_long[3]" & scenario == 6 ~ 0.12,
-        variable == "beta_long[3]" & scenario == 7 ~ -0.12,
-        variable == "beta_surv[1]" & scenario == 1 ~ 0.00,
-        variable == "beta_surv[1]" & scenario == 2 ~ 0.90,
-        # variable == "beta_surv[1]" & scenario == 3 ~ -0.90,
-        variable == "beta_surv[1]" & scenario == 3 ~ 0.90,
-        # variable == "beta_surv[1]" & scenario == 4 ~ 1.80,
-        variable == "beta_surv[1]" & scenario == 4 ~ -0.90,
-        # variable == "beta_surv[1]" & scenario == 5 ~ -1.80,
-        variable == "beta_surv[1]" & scenario == 5 ~ -0.90,
-        variable == "beta_surv[1]" & scenario == 6 ~ 2.70,
-        variable == "beta_surv[1]" & scenario == 7 ~ -2.70,
-        TRUE ~ reference
-      ),
-      bias      = mean - reference,
-      rel_bias  = if_else(reference != 0, bias / reference, NA_real_),
-      rmse      = sqrt(sd^2 + bias^2)   # RMSE^2 = Var + Bias^2
+      reference = dplyr::coalesce(truth, reference),
+      rel_bias = if_else(reference != 0, bias / reference, NA_real_)
     )
   
   results_tab2 <- results_tab
@@ -732,6 +876,9 @@ if (nrow(all_summary_tables) > 0) {
       n         = as.integer(n),
       Cens      = format_cens_table(cens),
       Dist      = dist,
+      Baseline  = baseline_label,
+      Shape     = baseline_shape,
+      Scale     = baseline_scale,
       Scenario  = as.integer(scenario),
       Method    = "JM (Stan)"
     ) %>%
@@ -742,23 +889,41 @@ if (nrow(all_summary_tables) > 0) {
       n,
       Cens,
       Dist,
+      Baseline,
+      Shape,
+      Scale,
       Scenario,
       Method,
       Truth    = reference,
       Mean     = mean,
-      SD       = sd,
+      Bias     = bias,
+      EmpiricalSD = empirical_sd,
+      MeanPostSD = mean_post_sd,
       RelBias  = rel_bias,
       RMSE     = rmse,
-      Coverage = coverage
+      MeanCIWidth = mean_ci_width,
+      CP       = coverage,
+      MCSE_Mean = mcse_mean,
+      MCSE_CP = mcse_coverage,
+      n_sims
     ) %>%
     arrange(Parameter, Basis, k, n, Cens, Dist, Scenario, Method)
+  nice_tab_wide
   
   nice_ft <- nice_tab_wide %>%
-    mutate(across(c(Truth, Mean, SD, RelBias, RMSE, Coverage), ~ round(.x, 3))) %>%
+    mutate(across(c(Truth, Mean, Bias, EmpiricalSD, MeanPostSD, RelBias, RMSE, MeanCIWidth, CP, MCSE_Mean, MCSE_CP), ~ round(.x, 3))) %>%
     flextable::flextable() %>%
     flextable::autofit()
   
   print(nice_ft)
+  readr::write_csv(
+    nice_tab_wide,
+    file.path(summary_dir, paste0("jm_simulation_stats_", analysis_dist_file, ".csv"))
+  )
+  saveRDS(
+    nice_tab_wide,
+    file.path(summary_dir, paste0("jm_simulation_stats_", analysis_dist_file, ".rds"))
+  )
   
   # Create gamma summary tables for basis weights (BP/GB/GB_Quantile only)
   # GP model uses different parameters (gp_length_scale, gp_marginal_sd, f_gp)
@@ -774,6 +939,7 @@ if (nrow(all_summary_tables) > 0) {
       n         = as.integer(n),
       Cens      = format_cens_table(cens),
       Dist      = dist,
+      Baseline  = baseline_label,
       Scenario  = as.integer(scenario)
     ) %>%
     transmute(
@@ -783,6 +949,7 @@ if (nrow(all_summary_tables) > 0) {
       n,
       Cens,
       Dist,
+      Baseline,
       Scenario,
       Mean     = mean,
       SD       = sd,
@@ -803,6 +970,7 @@ if (nrow(all_summary_tables) > 0) {
       n         = as.integer(n),
       Cens      = format_cens_table(cens),
       Dist      = dist,
+      Baseline  = baseline_label,
       Scenario  = as.integer(scenario)
     ) %>%
     transmute(
@@ -812,6 +980,7 @@ if (nrow(all_summary_tables) > 0) {
       n,
       Cens,
       Dist,
+      Baseline,
       Scenario,
       Mean     = mean,
       SD       = sd,
@@ -1029,6 +1198,11 @@ if (nrow(all_filtered_data) > 0) {
     dplyr::pull(config)
   
   all_filtered_data$config <- factor(all_filtered_data$config, levels = desired_order)
+
+  saveRDS(
+    all_filtered_data,
+    file.path(summary_dir, paste0("jm_posterior_summaries_per_sim_", analysis_dist_file, ".rds"))
+  )
   
   # Reference lines for key parameters
   # Note: beta_long[3] and beta_surv[1] will be added dynamically per scenario in plots
@@ -1044,8 +1218,7 @@ if (nrow(all_filtered_data) > 0) {
       variable = c("beta_long[1]","beta_long[2]",
                    "sd_1_long[1]","sd_1_long[2]","sigma_long",
                    "alpha"),
-      # reference = c(73, -0.04, 15, 0.20, 12, 0.012)
-      reference = c(73, -0.04, 15, 0.20, 12, 0) # try no association 20260113
+      reference = c(73, -0.04, 15, 0.20, 12, 0.012)
     )
   }
   
@@ -1491,16 +1664,11 @@ if (all_models_are_aft_only) {
     4,         "beta_long[3]",   0.04,
     5,         "beta_long[3]",   -0.04,
     
-    # 1,         "alpha",          0.012,
-    # 2,         "alpha",          0.012,
-    # 3,         "alpha",          0.012,
-    # 4,         "alpha",          0.012,
-    # 5,         "alpha",          0.012,
-    1,         "alpha",          0.000, # try no association 20260113
-    2,         "alpha",          0.000, # try no association 20260113
-    3,         "alpha",          0.000, # try no association 20260113
-    4,         "alpha",          0.000, # try no association 20260113
-    5,         "alpha",          0.000, # try no association 20260113
+    1,         "alpha",          0.000,
+    2,         "alpha",          0.000,
+    3,         "alpha",          0.000,
+    4,         "alpha",          0.000,
+    5,         "alpha",          0.000,
     
     # you used gamma_1 as the survival covariate effect
     1,         "beta_surv[1]",   0.00,
@@ -1530,16 +1698,11 @@ if (all_models_are_aft_only) {
     4,         "beta_long[3]",   0.04,
     5,         "beta_long[3]",   -0.04,
     
-    # 1,         "alpha",          0.012,
-    # 2,         "alpha",          0.012,
-    # 3,         "alpha",          0.012,
-    # 4,         "alpha",          0.012,
-    # 5,         "alpha",          0.012,
-    1,         "alpha",          0.000, # try no association 20260113
-    2,         "alpha",          0.000, # try no association 20260113
-    3,         "alpha",          0.000, # try no association 20260113
-    4,         "alpha",          0.000, # try no association 20260113
-    5,         "alpha",          0.000, # try no association 20260113
+    1,         "alpha",          0.012,
+    2,         "alpha",          0.012,
+    3,         "alpha",          0.012,
+    4,         "alpha",          0.012,
+    5,         "alpha",          0.012,
     
     # you used gamma_1 as the survival covariate effect
     1,         "beta_surv[1]",   0.00,
@@ -1574,6 +1737,7 @@ perf_sim <- all_filtered_data %>%
     Parameter = factor(variable, levels = key_vars, labels = unname(param_labels[key_vars])),
     
     Dist      = factor(dist),
+    Baseline  = factor(dist_short),
     Scenario  = factor(scenario),
     Cens      = factor(format_cens_table(cens)),
     k         = factor(k_bases)
@@ -1581,8 +1745,8 @@ perf_sim <- all_filtered_data %>%
 
 # Sanity checks
 counts <- perf_sim %>%
-  count(Parameter, Dist, Scenario, Cens, k) %>%
-  arrange(Parameter, Dist, Cens, Scenario, k)
+  count(Parameter, Dist, Baseline, Scenario, Cens, k) %>%
+  arrange(Parameter, Dist, Baseline, Cens, Scenario, k)
 print(counts)
 
 if (nrow(perf_sim) == 0) {
@@ -1592,14 +1756,14 @@ if (nrow(perf_sim) == 0) {
 # Optional diagnostic: check beta_0 (intercept) centering
 beta0_check <- perf_sim %>%
   dplyr::filter(as.character(Parameter) == "beta[0]") %>%
-  group_by(Dist, Cens, Scenario, k) %>%
+  group_by(Dist, Baseline, Cens, Scenario, k) %>%
   summarise(
     mean_of_means   = mean(mean),
     sd_of_means     = sd(mean),
     median_abs_err  = median(abs_err),
     .groups = "drop"
   ) %>%
-  arrange(Dist, Cens, Scenario, k)
+  arrange(Dist, Baseline, Cens, Scenario, k)
 print(beta0_check)
 
 # ------------------------------------------------------------
@@ -1614,7 +1778,7 @@ facet_labeller <- ggplot2::labeller(
 p_bias <- ggplot(perf_sim, aes(x = Scenario, y = bias)) +
   geom_boxplot(outlier.size = 0.4) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  facet_grid(Cens ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -1625,7 +1789,7 @@ p_bias <- ggplot(perf_sim, aes(x = Scenario, y = bias)) +
 # Absolute error distribution (NOT RMSE)
 p_abserr <- ggplot(perf_sim, aes(x = Scenario, y = abs_err)) +
   geom_boxplot(outlier.size = 0.4) +
-  facet_grid(Cens ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -1635,7 +1799,7 @@ p_abserr <- ggplot(perf_sim, aes(x = Scenario, y = abs_err)) +
 
 # True RMSE is a group summary (one value per Scenario × Cens × Parameter × k)
 rmse_sum <- perf_sim %>%
-  group_by(Parameter, Scenario, Cens, k) %>%
+  group_by(Parameter, Baseline, Scenario, Cens, k) %>%
   summarise(
     rmse = sqrt(mean(sq_error)),
     .groups = "drop"
@@ -1643,7 +1807,7 @@ rmse_sum <- perf_sim %>%
 
 p_rmse <- ggplot(rmse_sum, aes(x = Scenario, y = rmse, group = k)) +
   geom_point(position = position_dodge(width = 0.35)) +
-  facet_grid(Cens ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -1653,7 +1817,7 @@ p_rmse <- ggplot(rmse_sum, aes(x = Scenario, y = rmse, group = k)) +
 
 # Coverage summary + CI (binomial normal approx)
 cov_sum <- perf_sim %>%
-  group_by(Parameter, Scenario, Cens, k) %>%
+  group_by(Parameter, Baseline, Scenario, Cens, k) %>%
   summarise(
     coverage = mean(covered),
     n = n(),
@@ -1671,7 +1835,7 @@ p_cov <- ggplot(cov_sum, aes(x = Scenario, y = coverage, group = k)) +
     position = position_dodge(width = 0.35)
   ) +
   geom_hline(yintercept = 0.95, linetype = "dashed") +
-  facet_grid(Cens ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
