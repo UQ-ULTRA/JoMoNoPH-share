@@ -36,17 +36,31 @@ source(here("Bunya", "Auxiliary", "BP-functions.R"))
 # Settings
 ##########
 
+# Want to look over three 'problematic' scenarios
+# 1) LL 1.20 shape 23.0 scale, scenario 1
+# 2) WB 0.90 shape 38.0 scale, scenario 3
+# 3) WB 0.90 shape 38.0 scale, scenario 5
+
+
 # Edit these to change the scenario, sample size, and sampler controls
 
-seed <- 214214
-scenario <- 2          # ENZAMET data-gen scenario (1, 2, 4, ...)
-n_patients <- 200        # smaller than ENZAMET full (1100) for local speed
-max_FU <- 72
-lambda_c <- 0.03320312 # scenario-2 censoring rate; set 0 for no censoring
-k_bases <- 5          # Bernstein basis dimension
+seed <- 5
+scenario <- 1 # ENZAMET data-gen scenario (1, 2, 4, ...)
+n_patients <- 1100 # smaller than ENZAMET full (1100) for local speed
+max_FU <- 120
+lambda_c <- 0.009948730 # scenario-2 censoring rate; set 0 for no censoring
+k_bases <- 5  # Bernstein basis dimension
 chains <- 4
 iter_warmup <- 1000
 iter_sampling <- 1000
+# Might want to make max_treedepth 12 instead of 10
+
+
+# lambda_c = c(
+#   0.009948730, 0.003906250, 0.004272461, 0.017028809, 0.017211914, # loglogistic(1.20, 23.0), 50% censoring
+#   0.009643555, 0.003479004, 0.003784180, 0.017211914, 0.017456055, # Weibull(0.90, 38.0) # administrative censoring
+#   0.008666992, 0.002227783, 0.002593994, 0.015563965, 0.015716553  # Weibull(1.30, 38.0) # administrative censoring
+# )
 
 ##########
 
@@ -64,13 +78,13 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   mf_long$id   <- mf_long_raw$id[idx_long]
   mf_long$time <- mf_long_raw$time[idx_long]
   mf_long$arm  <- mf_long_raw$arm[idx_long]
-
+  
   X_long   <- model.matrix(~ time + time_by_arm, data = mf_long)
   Y_long   <- as.numeric(model.response(mf_long))
   id_long  <- as.factor(mf_long$id)
   J_1_long <- as.integer(id_long)
   N_1_long <- length(unique(J_1_long))
-
+  
   mf_surv        <- model.frame(fit_surv)
   idx_surv       <- as.numeric(rownames(mf_surv))
   mf_surv$id     <- surv_data$id[idx_surv]
@@ -81,10 +95,10 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   mf_surv$arm    <- as.numeric(mf_surv$arm)
   X_surv         <- model.matrix(~ 0 + arm, data = mf_surv)
   J_1_unique     <- match(unique(mf_surv$id), levels(id_long))
-
+  
   mf_surv$time_by_arm <- mf_surv$time * mf_surv$arm
   X_long_surv <- model.matrix(~ time + time_by_arm, data = mf_surv)
-
+  
   beta_long_mean <- nlme::fixef(fit_long)
   beta_surv_mean <- coef(fit_surv)[-1]
   vc_long        <- VarCorr(fit_long)
@@ -92,7 +106,7 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   s_long         <- summary(fit_long)$sigma
   s_surv         <- summary(fit_surv)$scale
   alpha_tilde_sd <- (log(2) / 1.96) * (s_long / s_surv)
-
+  
   list(
     N_long = nrow(X_long), K_long = ncol(X_long),
     Y_long = Y_long, X_long = X_long,
@@ -137,7 +151,7 @@ make_init <- function(sim_dat, stan_data, chains) {
   b_sv <- rep(coef(aft)[2], stan_data$q)
   rho  <- 0.2
   L    <- t(chol(matrix(c(1, rho, rho, 1), 2, 2)))
-
+  
   lapply(seq_len(chains), function(.) {
     list(
       z_1_long    = matrix(rnorm(2 * stan_data$N_1_long), nrow = 2),
@@ -261,28 +275,28 @@ res_bp <- fit_stan_model(
 message(sprintf("BP fitted in %.1f s", res_bp$elapsed))
 
 summ_bp <- res_bp$fit$summary(NULL, posterior::default_summary_measures(),
-                                    quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
+                              quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
 summ_bp$model <- "BP"
 print(res_bp$fit$diagnostic_summary())
 
 
 ### Model 4: BP_Penalty (BP with second-order difference penalty)
 
-res_bpp <- fit_stan_model(
-  stan_file     = here("Stan", "Bernstein-Polynomials-JM-Hist-Penalty.stan"),
-  stan_data     = stan_data,
-  init_vals     = init_vals,
-  seed          = seed,
-  chains        = chains,
-  iter_warmup   = iter_warmup,
-  iter_sampling = iter_sampling
-)
-message(sprintf("BP_Penalty fitted in %.1f s", res_bpp$elapsed))
-
-summ_bpp       <- res_bpp$fit$summary(NULL, posterior::default_summary_measures(),
-                                      quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
-summ_bpp$model <- "BP_Penalty"
-print(res_bpp$fit$diagnostic_summary())
+# res_bpp <- fit_stan_model(
+#   stan_file     = here("Stan", "Bernstein-Polynomials-JM-Hist-Penalty.stan"),
+#   stan_data     = stan_data,
+#   init_vals     = init_vals,
+#   seed          = seed,
+#   chains        = chains,
+#   iter_warmup   = iter_warmup,
+#   iter_sampling = iter_sampling
+# )
+# message(sprintf("BP_Penalty fitted in %.1f s", res_bpp$elapsed))
+# 
+# summ_bpp       <- res_bpp$fit$summary(NULL, posterior::default_summary_measures(),
+#                                       quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
+# summ_bpp$model <- "BP_Penalty"
+# print(res_bpp$fit$diagnostic_summary())
 
 
 
@@ -307,10 +321,10 @@ print(summ_bp %>%
         select(variable, mean, median, sd, q2.5, q97.5, rhat, ess_bulk))
 
 ### BP_Penalty posterior summary (key parameters)
-cat("\nBP_Penalty posterior summary\n")
-print(summ_bpp %>%
-        filter(variable %in% params_of_interest) %>%
-        select(variable, mean, median, sd, q2.5, q97.5, rhat, ess_bulk))
+# cat("\nBP_Penalty posterior summary\n")
+# print(summ_bpp %>%
+#         filter(variable %in% params_of_interest) %>%
+#         select(variable, mean, median, sd, q2.5, q97.5, rhat, ess_bulk))
 
 ### JMbayes2 survival and association summaries
 s <- summary(fit_jmb2)
@@ -322,5 +336,6 @@ print(data.frame(
   model   = c("LMM", "BP (Stan)", "BP_Penalty (Stan)", "JMbayes2 Cox PH"),
   seconds = round(c(lmm_time, res_bp$elapsed, res_bpp$elapsed, jmb2_time), 1)
 ))
+
 
 ##########
