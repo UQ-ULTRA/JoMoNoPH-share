@@ -155,6 +155,39 @@ data {
   matrix[n, K_long] X_long_surv;
 }
 
+// transformed data
+transformed data {
+  // ---- R-TH DIFFERENCE PENALTY MATRIX ----
+  // Build the r-th difference penalty matrix Delta_r
+  int n_diff = m - r;  // number of r-th differences
+  matrix[n_diff, m] Delta_r = rep_matrix(0, n_diff, m);
+  matrix[m, m] penalty_matrix;
+
+  // Compute rank of penalty matrix (number of non-zero eigenvalues)
+  int rho = n_diff;  // For r-th differences, rank is typically m-r
+
+  // Fill the difference matrix
+  for (i in 1:n_diff) {
+    // Compute binomial coefficients for r-th difference
+    for (j in 0:r) {
+      int sign = (j % 2 == 0) ? 1 : -1;
+      real binom_coef = 1;
+
+      // Compute binomial coefficient C(r,j)
+      if (j > 0) {
+        for (k in 1:j) {
+          binom_coef *= (r - k + 1) * 1.0 / k;
+        }
+      }
+
+      Delta_r[i, i + j] = sign * binom_coef;
+    }
+  }
+
+  // Compute Delta_r^T * Delta_r for the quadratic penalty
+  penalty_matrix = Delta_r' * Delta_r;
+}
+
 // Parameters
 parameters {
   //// longitudinal parameters
@@ -173,38 +206,6 @@ parameters {
   // association between longitudinal and survival submodels
   real alpha_tilde; 
   
-}
-
-// transformed data
-transformed data {
-  // ---- R-TH DIFFERENCE PENALTY MATRIX ----
-  // Build the r-th difference penalty matrix Delta_r
-  int n_diff = m - r;  // number of r-th differences
-  matrix[n_diff, m] Delta_r = rep_matrix(0, n_diff, m);
-  
-  // Fill the difference matrix
-  for (i in 1:n_diff) {
-    // Compute binomial coefficients for r-th difference
-    for (j in 0:r) {
-      int sign = (j % 2 == 0) ? 1 : -1;
-      real binom_coef = 1;
-      
-      // Compute binomial coefficient C(r,j)
-      if (j > 0) {
-        for (k in 1:j) {
-          binom_coef *= (r - k + 1) * 1.0 / k;
-        }
-      }
-      
-      Delta_r[i, i + j] = sign * binom_coef;
-    }
-  }
-  
-  // Compute Delta_r^T * Delta_r for the quadratic penalty
-  matrix[m, m] penalty_matrix = Delta_r' * Delta_r;
-  
-  // Compute rank of penalty matrix (number of non-zero eigenvalues)
-  int rho = n_diff;  // For r-th differences, rank is typically m-r
 }
 
 // Transformed Parameters
