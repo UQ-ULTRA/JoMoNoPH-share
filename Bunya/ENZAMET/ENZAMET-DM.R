@@ -530,6 +530,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   
   # New (globally unique):
   unique_seed <- 1e6 * config_hash + i    
+  print(unique_seed)
   
   # Generate data using ENZAMET data generator
   sim_dat <- simulate_joint_dataset(
