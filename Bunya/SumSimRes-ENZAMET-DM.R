@@ -72,7 +72,7 @@ if (has_aft_only_models && !all_models_are_aft_only) {
 ##########
 
 bunya <- FALSE
-analysis_output_dir <- here::here("Bunya", "ENZAMET", "output") # Set manually to pin one run; empty means use newest output_* folder.
+analysis_output_dir <- here::here("Bunya", "ENZAMET", "output_local_penalty_fixed_seed5") # Set manually to pin one run; empty means use newest output_* folder.
 
 find_latest_output_dir <- function(base_dir) {
   output_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)
