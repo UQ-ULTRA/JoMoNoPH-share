@@ -14,6 +14,7 @@
 #   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --batch-size 1 --sims-per-config 1 --fixed-seed 5
 #   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --force-recompile
 #   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --stan-model-file Stan/Bernstein-Polynomials-JM-Hist-Penalty.stan --force-recompile
+#   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --adapt-delta 0.99 --max-treedepth 12
 
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -32,6 +33,15 @@ as_int_arg <- function(flag, default) {
   value <- suppressWarnings(as.integer(value))
   if (is.na(value)) {
     stop(sprintf("Argument %s must be an integer.", flag), call. = FALSE)
+  }
+  value
+}
+
+as_num_arg <- function(flag, default) {
+  value <- arg_value(flag, default)
+  value <- suppressWarnings(as.numeric(value))
+  if (is.na(value)) {
+    stop(sprintf("Argument %s must be numeric.", flag), call. = FALSE)
   }
   value
 }
@@ -143,6 +153,43 @@ if (!is.null(safe_elapsed)) {
   pipeline <- sub("safe_elapsed <- 14400", sprintf("safe_elapsed <- %d", safe_elapsed), pipeline, fixed = TRUE)
 }
 
+adapt_delta <- arg_value("--adapt-delta", NULL)
+if (!is.null(adapt_delta)) {
+  adapt_delta <- as_num_arg("--adapt-delta", NA_real_)
+  if (adapt_delta <= 0 || adapt_delta >= 1) {
+    stop("Argument --adapt-delta must be between 0 and 1.", call. = FALSE)
+  }
+
+  # Local-only sampling control. Higher adapt_delta asks NUTS to use smaller
+  # step sizes, which is the first diagnostic response to divergent transitions.
+  max_treedepth_line <- grep("max_treedepth =", pipeline, fixed = TRUE)
+  if (length(max_treedepth_line) != 1) {
+    stop("Could not find a unique max_treedepth line in ENZAMET-DM.R.", call. = FALSE)
+  }
+  pipeline <- append(
+    pipeline,
+    sprintf("    adapt_delta = %.15g,", adapt_delta),
+    after = max_treedepth_line - 1
+  )
+}
+
+max_treedepth <- arg_value("--max-treedepth", NULL)
+if (!is.null(max_treedepth)) {
+  max_treedepth <- as_int_arg("--max-treedepth", NA_integer_)
+  if (max_treedepth < 1) {
+    stop("Argument --max-treedepth must be positive.", call. = FALSE)
+  }
+
+  # Local-only sampling control. Larger max_treedepth allows longer NUTS
+  # trajectories when chains repeatedly hit the default depth cap.
+  pipeline <- sub(
+    "max_treedepth = 10",
+    sprintf("max_treedepth = %d", max_treedepth),
+    pipeline,
+    fixed = TRUE
+  )
+}
+
 seed_offset <- arg_value("--seed-offset", NULL)
 if (!is.null(seed_offset)) {
   seed_offset <- as_int_arg("--seed-offset", NA_integer_)
@@ -195,6 +242,12 @@ if (!is.null(seed_offset)) {
 }
 if (!is.null(fixed_seed)) {
   message("  fixed_seed: ", fixed_seed)
+}
+if (!is.null(adapt_delta)) {
+  message("  adapt_delta: ", adapt_delta)
+}
+if (!is.null(max_treedepth)) {
+  message("  max_treedepth: ", max_treedepth)
 }
 if (!is.null(stan_model_file)) {
   message("  stan_model_file: ", stan_model_file)

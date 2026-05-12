@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Local rerun of the three one-replicate JM configs that showed severe
-# convergence problems under the non-penalised Bernstein model.
+# convergence problems under the standard non-penalised Bernstein model.
 #
 # Config/task mapping with batch_size = 1 and sims_per_config = 1:
 #   task 1  = LL120_230, scenario 1, 50% censoring
@@ -14,8 +14,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 CPUS="${CPUS:-8}"
 FIXED_SEED="${FIXED_SEED:-5}"
-OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/Bunya/ENZAMET/output_local_penalty_fixed_seed${FIXED_SEED}}"
-STAN_FILE="${REPO_ROOT}/Stan/Bernstein-Polynomials-JM-Hist-Penalty.stan"
+OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/Bunya/ENZAMET/output_local_standard_adapt099_td12_fixed_seed${FIXED_SEED}}"
+STAN_FILE="${REPO_ROOT}/Stan/Bernstein-Polynomials-JM-Hist.stan"
 LOCAL_RUNNER="${REPO_ROOT}/Bunya/ENZAMET/ENZAMET-local-DM.R"
 
 mkdir -p "${OUTPUT_DIR}"
@@ -26,6 +26,10 @@ common_args=(
   --fixed-seed "${FIXED_SEED}"
   --cpus "${CPUS}"
   --safe-elapsed 21600
+  # Diagnostic sampling controls for the problematic JM configs:
+  # adapt_delta targets fewer divergences; max_treedepth allows longer NUTS trajectories.
+  --adapt-delta 0.99
+  --max-treedepth 12
   --output-dir "${OUTPUT_DIR}"
   --stan-model-file "${STAN_FILE}"
 )
@@ -34,6 +38,7 @@ echo "Output directory: ${OUTPUT_DIR}"
 echo "Stan model: ${STAN_FILE}"
 echo "Fixed seed: ${FIXED_SEED}"
 echo "CPUs per run: ${CPUS}"
+echo "Sampling controls: adapt_delta=0.99, max_treedepth=12"
 
 echo "Running task 1 with forced compilation..."
 Rscript "${LOCAL_RUNNER}" --task-id 1 "${common_args[@]}" --force-recompile
@@ -44,4 +49,4 @@ Rscript "${LOCAL_RUNNER}" --task-id 16 "${common_args[@]}"
 echo "Running task 20..."
 Rscript "${LOCAL_RUNNER}" --task-id 20 "${common_args[@]}"
 
-echo "Finished penalty-model reruns."
+echo "Finished standard-model reruns."
