@@ -562,6 +562,23 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   # Augment longitudinal data with time-by-arm interaction
   sim_dat$longitudinal <- sim_dat$longitudinal %>%
     mutate(time_by_arm = time * arm)
+
+  # Center the longitudinal response using the observed dataset mean before
+  # fitting. This avoids feeding Stan a large intercept while not using true
+  # simulation parameters. The saved beta_long[1] summaries are shifted back to
+  # the raw Y scale below, so existing aggregation code can still use truth = 73.
+  longitudinal_response_center <- 0
+  if (!joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+    longitudinal_response_center <- mean(sim_dat$longitudinal$Y_obs, na.rm = TRUE)
+    if (!is.finite(longitudinal_response_center)) {
+      stop("Observed longitudinal response mean is not finite; cannot center Y_obs.")
+    }
+    sim_dat$longitudinal$Y_obs <- sim_dat$longitudinal$Y_obs - longitudinal_response_center
+    message(sprintf(
+      "Centered longitudinal response by subtracting observed mean %.6f before fitting.",
+      longitudinal_response_center
+    ))
+  }
   
   # Track runtime for LME fit
   t_lme_start <- Sys.time()
@@ -933,7 +950,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     threads_per_chain = threads_per_chain,
     iter_warmup = 1000,
     iter_sampling = 1000,
-    max_treedepth = 10)
+    max_treedepth = 12)
   t_stan_joint_elapsed <- as.numeric(difftime(Sys.time(), t_stan_joint_start, units = "secs"))
   
   # Compute LOO and WAIC for joint model
@@ -960,6 +977,20 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   summ_joint$sim_id <- i
   summ_joint$model <- joint_model_type
   summ_joint$rhat <- fit_joint$summary()$rhat # added to store rhat for all parameters in the summary table
+
+  # Back-transform the centered-response intercept for saved summaries. Pure
+  # response centering leaves slopes, SDs, and alpha on their original scale.
+  if (is.finite(longitudinal_response_center) && longitudinal_response_center != 0) {
+    beta0_row <- summ_joint$variable == "beta_long[1]"
+    shift_cols <- intersect(c("mean", "median", "q2.5", "q97.5"), names(summ_joint))
+    if (any(beta0_row) && length(shift_cols) > 0) {
+      summ_joint[beta0_row, shift_cols] <- lapply(
+        summ_joint[beta0_row, shift_cols, drop = FALSE],
+        function(x) x + longitudinal_response_center
+      )
+    }
+    attr(summ_joint, "longitudinal_response_center") <- longitudinal_response_center
+  }
   
   diag_joint <- fit_joint$diagnostic_summary()
   diag_joint$sim_id <- i
@@ -969,6 +1000,12 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   coefs <- NULL
   if (!is.null(fit_long)) {
     coefs <- nlme::fixef(fit_long)
+    if (is.finite(longitudinal_response_center) &&
+        longitudinal_response_center != 0 &&
+        "(Intercept)" %in% names(coefs)) {
+      coefs["(Intercept)"] <- coefs["(Intercept)"] + longitudinal_response_center
+      attr(coefs, "longitudinal_response_center") <- longitudinal_response_center
+    }
   }
   
   # Collect runtimes
@@ -1032,6 +1069,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     return(list(
       censor_prop = mean(sim_dat$survival$status == 0),
       unique_seed = unique_seed,
+      longitudinal_response_center = longitudinal_response_center,
       baseline_label = baseline_label,
       aft_mode = aft_mode,
       weibull_shape = cfg_weibull_shape,
@@ -1056,6 +1094,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     return(list(
       censor_prop = mean(sim_dat$survival$status == 0),
       unique_seed = unique_seed,
+      longitudinal_response_center = longitudinal_response_center,
       baseline_label = baseline_label,
       aft_mode = aft_mode,
       weibull_shape = cfg_weibull_shape,
@@ -1092,15 +1131,16 @@ message(sprintf(
 if (array_task_id == 0) stop("SLURM_ARRAY_TASK_ID not found.")
 
 #### Define configuration grid for ENZAMET sAFT-JM full run ####
-# 3 baselines x 5 Table 2 scenarios x 2 censoring settings = 30 configs.
-# Active baselines: loglogistic(1.20, 23.0), Weibull(0.90, 38.0), Weibull(1.30, 38.0).
+# 4 baselines x 5 Table 2 scenarios x 2 censoring settings = 40 configs.
+# Active baselines: loglogistic(1.20, 23.0), Weibull(0.90, 38.0),
+# Weibull(1.30, 38.0), Weibull(2.10, 38.0).
 baseline_grid <- data.frame(
-  baseline_label = c("LL120_230", "W090_380", "W130_380"),
-  aft_mode = c("loglogistic", "Weibull", "Weibull"),
-  weibull_shape = c(NA_real_, 0.90, 1.30),
-  weibull_scale = c(NA_real_, 38.0, 38.0),
-  loglogistic_shape = c(1.20, NA_real_, NA_real_),
-  loglogistic_scale = c(23.0, NA_real_, NA_real_),
+  baseline_label = c("LL120_230", "W090_380", "W130_380", "W210_380"),
+  aft_mode = c("loglogistic", "Weibull", "Weibull", "Weibull"),
+  weibull_shape = c(NA_real_, 0.90, 1.30, 2.10),
+  weibull_scale = c(NA_real_, 38.0, 38.0, 38.0),
+  loglogistic_shape = c(1.20, NA_real_, NA_real_, NA_real_),
+  loglogistic_scale = c(23.0, NA_real_, NA_real_, NA_real_),
   stringsAsFactors = FALSE
 )
 
@@ -1123,7 +1163,8 @@ lambda_c_table <- data.frame(
   lambda_c = c(
     0.009948730, 0.003906250, 0.004272461, 0.017028809, 0.017211914, # loglogistic(1.20, 23.0)
     0.009643555, 0.003479004, 0.003784180, 0.017211914, 0.017456055, # Weibull(0.90, 38.0)
-    0.008666992, 0.002227783, 0.002593994, 0.015563965, 0.015716553  # Weibull(1.30, 38.0)
+    0.008666992, 0.002227783, 0.002593994, 0.015563965, 0.015716553, # Weibull(1.30, 38.0)
+    0.008056641, 0.001098633, 0.001464844, 0.014099121, 0.014160156  # Weibull(2.10, 38.0)
   ),
   stringsAsFactors = FALSE
 )
@@ -1151,15 +1192,28 @@ config_grid <- config_grid[order(
 ), ]
 row.names(config_grid) <- NULL
 
-# Full run: 1000 replicates per config, split into 125 batches of 8.
-batch_size <- 8
-sims_per_config <- 1000
-batches_per_config <- sims_per_config / batch_size
+# Full-run defaults: 1000 replicates per config, split into 125 batches of 8.
+# Slurm launchers can override these for small test runs.
+batch_size <- as.integer(Sys.getenv("SIM_BATCH_SIZE", unset = "8"))
+sims_per_config <- as.integer(Sys.getenv("SIMS_PER_CONFIG", unset = "1000"))
+if (is.na(batch_size) || batch_size < 1) stop("SIM_BATCH_SIZE must be a positive integer.")
+if (is.na(sims_per_config) || sims_per_config < 1) stop("SIMS_PER_CONFIG must be a positive integer.")
+if (sims_per_config %% batch_size != 0) {
+  stop(sprintf(
+    "SIMS_PER_CONFIG (%d) must be divisible by SIM_BATCH_SIZE (%d).",
+    sims_per_config, batch_size
+  ))
+}
+batches_per_config <- sims_per_config %/% batch_size
 
 # Decode SLURM array index into config ID and batch ID
 config_id <- ((sim_id - 1) %/% batches_per_config) + 1      
 batch_id  <- ((sim_id - 1) %% batches_per_config) + 1       
 total_array_tasks <- nrow(config_grid) * batches_per_config
+message(sprintf(
+  "Configured simulation: %d configs x %d batches/config = %d array tasks; batch_size=%d, sims_per_config=%d",
+  nrow(config_grid), batches_per_config, total_array_tasks, batch_size, sims_per_config
+))
 if (sim_id > total_array_tasks) {
   stop(sprintf("SLURM_ARRAY_TASK_ID %d exceeds configured array size %d.", sim_id, total_array_tasks))
 }
@@ -1221,7 +1275,24 @@ batch_output_complete <- function(path, expected_n) {
     NULL
   })
   if (!is.list(existing) || length(existing) != expected_n) return(FALSE)
-  !any(vapply(existing, is.null, logical(1)))
+  if (any(vapply(existing, is.null, logical(1)))) return(FALSE)
+
+  # The centered-response production run must not silently reuse complete
+  # outputs produced by the older uncentered code.
+  if (!joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
+    has_center_marker <- vapply(existing, function(x) {
+      is.list(x) &&
+        "longitudinal_response_center" %in% names(x) &&
+        is.finite(x$longitudinal_response_center) &&
+        x$longitudinal_response_center != 0
+    }, logical(1))
+    if (!all(has_center_marker)) {
+      message("Existing output lacks centered-response marker and will be regenerated.")
+      return(FALSE)
+    }
+  }
+
+  TRUE
 }
 
 if (batch_output_complete(out_file, length(trial_ids))) {

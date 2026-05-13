@@ -15,6 +15,7 @@
 #   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --force-recompile
 #   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --stan-model-file Stan/Bernstein-Polynomials-JM-Hist-Penalty.stan --force-recompile
 #   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --adapt-delta 0.99 --max-treedepth 12
+#   Rscript Bunya/ENZAMET/ENZAMET-local-DM.R --task-id 1 --center-longitudinal-response
 
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -153,6 +154,86 @@ if (!is.null(safe_elapsed)) {
   pipeline <- sub("safe_elapsed <- 14400", sprintf("safe_elapsed <- %d", safe_elapsed), pipeline, fixed = TRUE)
 }
 
+center_longitudinal_response <- has_flag("--center-longitudinal-response")
+production_centers_longitudinal_response <- any(grepl(
+  "longitudinal_response_center <- mean(sim_dat$longitudinal$Y_obs",
+  pipeline,
+  fixed = TRUE
+))
+if (center_longitudinal_response && production_centers_longitudinal_response) {
+  message("  --center-longitudinal-response requested, but ENZAMET-DM.R already centers Y_obs; no extra centering injected.")
+} else if (center_longitudinal_response) {
+  center_line <- grep("mutate(time_by_arm = time * arm)", pipeline, fixed = TRUE)
+  if (length(center_line) != 1) {
+    stop("Could not find a unique time_by_arm mutate line in ENZAMET-DM.R.", call. = FALSE)
+  }
+  pipeline <- append(
+    pipeline,
+    c(
+      "",
+      "  # Local experiment: center the longitudinal response using the observed",
+      "  # dataset mean. This improves parameter scale without using true values.",
+      "  .local_long_response_center <- mean(sim_dat$longitudinal$Y_obs, na.rm = TRUE)",
+      "  sim_dat$longitudinal$Y_obs <- sim_dat$longitudinal$Y_obs - .local_long_response_center",
+      "  message(sprintf(\"Local centering: subtracted observed mean %.6f from Y_obs before fitting.\",",
+      "                  .local_long_response_center))"
+    ),
+    after = center_line
+  )
+
+  summary_line <- grep("summ_joint\\$rhat <- fit_joint\\$summary\\(\\)\\$rhat", pipeline)
+  if (length(summary_line) != 1) {
+    stop("Could not find a unique joint summary rhat line in ENZAMET-DM.R.", call. = FALSE)
+  }
+  pipeline <- append(
+    pipeline,
+    c(
+      "",
+      "  # Back-transform the centered-response intercept for saved summaries.",
+      "  # Slopes, residual SDs, random-effect SDs, and alpha are unchanged by pure centering.",
+      "  if (exists(\".local_long_response_center\", inherits = FALSE) &&",
+      "      is.finite(.local_long_response_center)) {",
+      "    .local_beta0_row <- summ_joint$variable == \"beta_long[1]\"",
+      "    .local_shift_cols <- intersect(c(\"mean\", \"median\", \"q2.5\", \"q97.5\"), names(summ_joint))",
+      "    if (any(.local_beta0_row) && length(.local_shift_cols) > 0) {",
+      "      summ_joint[.local_beta0_row, .local_shift_cols] <- lapply(",
+      "        summ_joint[.local_beta0_row, .local_shift_cols, drop = FALSE],",
+      "        function(x) x + .local_long_response_center",
+      "      )",
+      "    }",
+      "    attr(summ_joint, \"longitudinal_response_center\") <- .local_long_response_center",
+      "  }"
+    ),
+    after = summary_line
+  )
+
+  coefs_line <- grep("coefs <- nlme::fixef\\(fit_long\\)", pipeline)
+  if (length(coefs_line) != 1) {
+    stop("Could not find a unique LME coefficient extraction line in ENZAMET-DM.R.", call. = FALSE)
+  }
+  pipeline <- append(
+    pipeline,
+    c(
+      "    if (exists(\".local_long_response_center\", inherits = FALSE) &&",
+      "        is.finite(.local_long_response_center) && \"(Intercept)\" %in% names(coefs)) {",
+      "      coefs[\"(Intercept)\"] <- coefs[\"(Intercept)\"] + .local_long_response_center",
+      "      attr(coefs, \"longitudinal_response_center\") <- .local_long_response_center",
+      "    }"
+    ),
+    after = coefs_line
+  )
+
+  pipeline <- gsub(
+    "unique_seed = unique_seed,",
+    paste0(
+      "unique_seed = unique_seed,\n",
+      "      longitudinal_response_center = if (exists(\".local_long_response_center\", inherits = FALSE)) .local_long_response_center else 0,"
+    ),
+    pipeline,
+    fixed = TRUE
+  )
+}
+
 adapt_delta <- arg_value("--adapt-delta", NULL)
 if (!is.null(adapt_delta)) {
   adapt_delta <- as_num_arg("--adapt-delta", NA_real_)
@@ -183,10 +264,9 @@ if (!is.null(max_treedepth)) {
   # Local-only sampling control. Larger max_treedepth allows longer NUTS
   # trajectories when chains repeatedly hit the default depth cap.
   pipeline <- sub(
-    "max_treedepth = 10",
+    "max_treedepth = [0-9]+",
     sprintf("max_treedepth = %d", max_treedepth),
-    pipeline,
-    fixed = TRUE
+    pipeline
   )
 }
 
@@ -249,6 +329,7 @@ if (!is.null(adapt_delta)) {
 if (!is.null(max_treedepth)) {
   message("  max_treedepth: ", max_treedepth)
 }
+message("  center_longitudinal_response: ", center_longitudinal_response)
 if (!is.null(stan_model_file)) {
   message("  stan_model_file: ", stan_model_file)
 }
