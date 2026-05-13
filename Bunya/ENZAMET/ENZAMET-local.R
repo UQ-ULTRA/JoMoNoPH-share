@@ -217,7 +217,15 @@ sim_dat <- simulate_joint_dataset(
   aft_mode = "loglogistic", link_type = "value"
 )
 
-sim_dat$longitudinal <- sim_dat$longitudinal %>% mutate(time_by_arm = time * arm)
+# Center longitudinal outcome and keep the sample mean for back-transformation later.
+Y_obs_sample_mean <- mean(sim_dat$longitudinal$Y_obs, na.rm = TRUE)
+sim_dat$longitudinal <- sim_dat$longitudinal %>%
+  mutate(
+    Y_obs = Y_obs - Y_obs_sample_mean,
+    time_by_arm = time * arm
+  )
+sim_dat$Y_obs_sample_mean <- Y_obs_sample_mean
+
 sim_dat$survival <- sim_dat$survival %>% dplyr::rename(time = T_obs)
 
 message(sprintf("Censoring proportion: %.1f%%", 100*mean(sim_dat$survival$status == 0)))
