@@ -1321,7 +1321,7 @@ workers <- min(workers, length(trial_ids))
 # Set up parallel backend
 plan(multisession, workers = workers)
 
-safe_elapsed <- 14400  # 4 hours per trial; rescue jobs request enough walltime for two waves
+safe_elapsed <- 18000  # 5 hours per trial; matches the test-run Slurm walltime
 
 results <- future_map(
   trial_ids,
