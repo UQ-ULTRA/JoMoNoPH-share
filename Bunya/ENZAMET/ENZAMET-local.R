@@ -44,7 +44,7 @@ source(here("Bunya", "Auxiliary", "BP-functions.R"))
 
 # Edit these to change the scenario, sample size, and sampler controls
 
-seed <- 5
+
 scenario <- 1 # ENZAMET data-gen scenario (1, 2, 4, ...)
 n_patients <- 1100 # smaller than ENZAMET full (1100) for local speed
 max_FU <- 120
@@ -55,6 +55,13 @@ iter_warmup <- 1000
 iter_sampling <- 1000
 # Might want to make max_treedepth 12 instead of 10
 
+
+# config_hash
+config_hash <- 1
+
+# Construct unique_seed from config_hash
+unique_seed <- 1e6 * config_hash + 1  
+seed <- unique_seed
 
 # lambda_c = c(
 #   0.009948730, 0.003906250, 0.004272461, 0.017028809, 0.017211914, # loglogistic(1.20, 23.0), 50% censoring
@@ -263,7 +270,44 @@ print(summary(fit_jmb2))
 
 ### Model 3: BP (Bernstein Polynomial baseline hazard)
 
-res_bp <- fit_stan_model(
+# res_bp <- fit_stan_model(
+#   stan_file = here("Stan", "Bernstein-Polynomials-JM-Hist.stan"),
+#   stan_data = stan_data,
+#   init_vals = init_vals,
+#   seed = seed,
+#   chains = chains,
+#   iter_warmup = iter_warmup,
+#   iter_sampling = iter_sampling
+# )
+# message(sprintf("BP fitted in %.1f s", res_bp$elapsed))
+# 
+# summ_bp <- res_bp$fit$summary(NULL, posterior::default_summary_measures(),
+#                               quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
+# summ_bp$model <- "BP"
+# print(res_bp$fit$diagnostic_summary())
+
+
+### Model 4: BP_Penalty (BP with second-order difference penalty)
+
+res_bpp <- fit_stan_model(
+  stan_file     = here("Stan", "Bernstein-Polynomials-JM-Hist-Penalty.stan"),
+  stan_data     = stan_data,
+  init_vals     = init_vals,
+  seed          = seed,
+  chains        = chains,
+  iter_warmup   = iter_warmup,
+  iter_sampling = iter_sampling
+)
+message(sprintf("BP_Penalty fitted in %.1f s", res_bpp$elapsed))
+
+summ_bpp       <- res_bpp$fit$summary(NULL, posterior::default_summary_measures(),
+                                      quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
+summ_bpp$model <- "BP_Penalty"
+print(res_bpp$fit$diagnostic_summary())
+
+### Model 5: 
+
+res_bp_2 <- fit_stan_model(
   stan_file = here("Stan", "Bernstein-Polynomials-JM-Hist.stan"),
   stan_data = stan_data,
   init_vals = init_vals,
@@ -278,26 +322,6 @@ summ_bp <- res_bp$fit$summary(NULL, posterior::default_summary_measures(),
                               quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
 summ_bp$model <- "BP"
 print(res_bp$fit$diagnostic_summary())
-
-
-### Model 4: BP_Penalty (BP with second-order difference penalty)
-
-# res_bpp <- fit_stan_model(
-#   stan_file     = here("Stan", "Bernstein-Polynomials-JM-Hist-Penalty.stan"),
-#   stan_data     = stan_data,
-#   init_vals     = init_vals,
-#   seed          = seed,
-#   chains        = chains,
-#   iter_warmup   = iter_warmup,
-#   iter_sampling = iter_sampling
-# )
-# message(sprintf("BP_Penalty fitted in %.1f s", res_bpp$elapsed))
-# 
-# summ_bpp       <- res_bpp$fit$summary(NULL, posterior::default_summary_measures(),
-#                                       quantiles = ~ posterior::quantile2(., probs = c(0.025, 0.975)))
-# summ_bpp$model <- "BP_Penalty"
-# print(res_bpp$fit$diagnostic_summary())
-
 
 
 ##########
