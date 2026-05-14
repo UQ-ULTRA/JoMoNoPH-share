@@ -150,8 +150,8 @@ data {
   // prior locations and scales
   vector[K_long] beta_long_prior_mean;
   vector<lower=0>[K_long] beta_long_prior_scale;
-  vector[q] beta_surv_prior_mean;
-  vector<lower=0>[q] beta_surv_prior_scale;
+  vector[K_surv] beta_surv_prior_mean;
+  vector<lower=0>[K_surv] beta_surv_prior_scale;
   
   // aft mode
   // int<lower=0> mode; // 0: weibull, 1: loglogistic, 2: bernstein polynomial, 4: gaussian process
