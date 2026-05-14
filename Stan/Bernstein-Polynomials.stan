@@ -13,8 +13,8 @@ functions {
     vector[N] omx = 1 - x_star;
     
     vector[N] H0 = rep_vector(0.0, N);
-    vector[N] x_pw = rep_vector(1.0, N); // x_star^j,   starts at j=0
-    vector[N] omx_pw = pow(omx, m); // (1-x_star)^(m-j), starts at j=0
+    vector[N] x_pw = rep_vector(1.0, N);  // x_star^j,   starts at j=0
+    vector[N] omx_pw = pow(omx, m);         // (1-x_star)^(m-j), starts at j=0
     
     for (j in 0:m){
       H0 += theta[j+1] * choose(m,j) * x_pw .* omx_pw;
@@ -47,7 +47,7 @@ functions {
       real delta_j = theta[j+1] - theta[j]; // should be >0 due to monotonicity
       nat_sum += delta_j * choose(m-1, j-1) * x_pw .* omx_pw;
       if (j < m) {
-        x_pw .*= x_star;  // advance to x_star^j
+        x_pw   .*= x_star;  // advance to x_star^j
         omx_pw ./= omx;     // advance to (1-x_star)^(m-j-1)
       }
     }
@@ -68,8 +68,8 @@ functions {
     
     vector[N] h0 = rep_vector((1/tau)*m, N) .* exp(-lin_pred);
     vector[N] nat_sum = rep_vector(0.0, N);
-    vector[N] x_pw = rep_vector(1.0, N); // x_star^(j-1), starts at j=1
-    vector[N] omx_pw = pow(omx, m - 1); // (1-x_star)^(m-j), starts at j=1
+    vector[N] x_pw = rep_vector(1.0, N);   // x_star^(j-1), starts at j=1
+    vector[N] omx_pw = pow(omx, m - 1);      // (1-x_star)^(m-j), starts at j=1
     
     // sum on the natural scale
     for (j in 1:m){
