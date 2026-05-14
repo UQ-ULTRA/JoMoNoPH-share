@@ -147,15 +147,17 @@ data {
   matrix[N_surv,K_surv] X_surv; // covariate matrix
   vector[N_surv] delta; // censoring indicators [1: event, 0: censored]
   
+  // prior locations and scales
+  vector[K_long] beta_long_prior_mean;
+  vector<lower=0>[K_long] beta_long_prior_scale;
+  vector[q] beta_surv_prior_mean;
+  vector<lower=0>[q] beta_surv_prior_scale;
+  
   // aft mode
   // int<lower=0> mode; // 0: weibull, 1: loglogistic, 2: bernstein polynomial, 4: gaussian process
   
   // bp specific
   int<lower=1> m; // order of bernstein polynomial
-  
-  // plotting purposes
-  int<lower=1> G; // num of grid points
-  vector[G] phi_grid; // grid for phi (scaled time) for plotting baseline hazards and cumulative hazards
   
   
   //// linking data
@@ -218,7 +220,7 @@ transformed parameters{
 model {
   
   //// longitudinal priors
-  beta_long ~ normal(0, 5);
+  beta_long ~ normal(beta_long_prior_mean, beta_long_prior_scale);
   sd_1_long ~ cauchy(0, 5);
   sigma_long ~ cauchy(0, 5);
   L_1_long ~ lkj_corr_cholesky(2);
@@ -234,7 +236,7 @@ model {
   
   //// time to event priors 
   alpha ~ normal(0,1);
-  gamma ~ normal(0,5); // regression coefficients 
+  gamma ~ normal(beta_surv_prior_mean, beta_surv_prior_scale); // regression coefficients 
   
   
   // bp priors
