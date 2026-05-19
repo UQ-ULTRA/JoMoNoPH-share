@@ -201,9 +201,6 @@ transformed parameters {
   
   real alpha = alpha_tilde * (s_surv / s_long);  // scale according to relative difference between longitudinal and survival
 
-  // Construct log likelihood 
-  vector[n] log_lik = loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv);
-
 }
 
 // Model
@@ -227,8 +224,34 @@ model {
   beta_surv ~ normal(beta_surv_prior_mean, beta_surv_prior_scale);
   alpha_tilde ~ normal(0, alpha_tilde_sd);
   
-  gamma ~ normal(0, 5) T[0, ];  // Keep base prior for positivity constraint
+  // Regularise Bernstein baseline-hazard weights to avoid extreme flexible
+  // baseline shapes that can drive very deep NUTS trajectories in simulations.
+  // Previous weaker prior:
+  // gamma ~ normal(0, 5) T[0, ];
+  gamma ~ normal(0, 1) T[0, ];
 
-  // survival likelihood
-  target += sum(log_lik);
+  // Survival likelihood. The longitudinal likelihood is already included above
+  // through Y_long ~ normal(...); the full joint log_lik is generated only for IC.
+  target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv));
+}
+
+generated quantities {
+  // Full patient-level joint log likelihood for PSIS-LOO/WAIC.
+  // This is intentionally generated after sampling, not used in target, to avoid
+  // double-counting the longitudinal likelihood and unnecessary HMC work.
+  vector[n] log_lik;
+  {
+    vector[n] log_lik_surv = loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv);
+    vector[n] log_lik_long = rep_vector(0, n);
+    vector[N_long] mu_long_ic = X_long * beta_long;
+
+    for (j in 1:N_long) {
+      mu_long_ic[j] += b_long[J_1_long[j], 1] * Z_1_1_long[j]
+                    + b_long[J_1_long[j], 2] * Z_1_2_long[j];
+      // J_1_long maps each repeated longitudinal observation back to its patient.
+      log_lik_long[J_1_long[j]] += normal_lpdf(Y_long[j] | mu_long_ic[j], sigma_long);
+    }
+
+    log_lik = log_lik_surv + log_lik_long;
+  }
 }

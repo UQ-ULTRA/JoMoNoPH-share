@@ -87,6 +87,17 @@ library(simsurv)
 library(cmdstanr)
 library(R.utils)
 
+# CmdStanR exposes PSIS-LOO through fit$loo(), but this version does not expose
+# a matching fit$waic() method. Compute WAIC directly from the Stan log_lik
+# matrix so waic_joint is populated rather than silently saved as NA.
+compute_waic_from_log_lik <- function(fit, log_lik_var = "log_lik") {
+  log_lik_draws <- fit$draws(variables = log_lik_var, format = "matrix")
+  if (is.null(log_lik_draws) || ncol(log_lik_draws) == 0) {
+    stop("No draws found for Stan log-likelihood variable: ", log_lik_var)
+  }
+  loo::waic(log_lik_draws)
+}
+
 # Set CmdStan path globally for main session
 set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
 
@@ -715,6 +726,13 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   } else {
     stop(sprintf("Unknown joint_model_type: %s. Use 'BP', 'GB', 'GB_Quantile', 'GP', 'BP_aft_alt', 'BP_aft_logy', 'GB_aft', 'GB_aft_logy', 'GB_aft_logy_adaptive', or 'BP_aft'.", joint_model_type))
   }
+
+  stan_model_file_override <- Sys.getenv("SIM_STAN_MODEL_FILE", unset = "")
+  if (nzchar(stan_model_file_override)) {
+    stan_model_file_joint <- stan_model_file_override
+  }
+  stan_model_file_joint <- path.expand(stan_model_file_joint)
+  message("Stan joint model file: ", stan_model_file_joint)
   
   if (joint_model_type %in% c("BP_aft", "BP_aft_alt", "BP_aft_logy", "GB_aft", "GB_aft_logy", "GB_aft_logy_adaptive")) {
     stan_data_joint <- convert_data_aft_only(fit_surv = fit_surv,
@@ -950,7 +968,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     threads_per_chain = threads_per_chain,
     iter_warmup = 1000,
     iter_sampling = 1000,
-    max_treedepth = 12)
+    max_treedepth = 10)
   t_stan_joint_elapsed <- as.numeric(difftime(Sys.time(), t_stan_joint_start, units = "secs"))
   
   # Compute LOO and WAIC for joint model
@@ -962,7 +980,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   })
   
   waic_joint <- tryCatch({
-    fit_joint$waic()
+    compute_waic_from_log_lik(fit_joint, log_lik_var = "log_lik")
   }, error = function(e) {
     message("WAIC computation failed for joint model: ", e$message)
     NULL
@@ -1321,7 +1339,8 @@ workers <- min(workers, length(trial_ids))
 # Set up parallel backend
 plan(multisession, workers = workers)
 
-safe_elapsed <- 18000  # 5 hours per trial; matches the test-run Slurm walltime
+safe_elapsed <- as.integer(Sys.getenv("SIM_SAFE_ELAPSED", unset = "18000"))
+if (is.na(safe_elapsed) || safe_elapsed < 1) stop("SIM_SAFE_ELAPSED must be a positive integer.")
 
 results <- future_map(
   trial_ids,
