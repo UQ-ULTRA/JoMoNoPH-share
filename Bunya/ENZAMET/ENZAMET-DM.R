@@ -1210,9 +1210,9 @@ config_grid <- config_grid[order(
 ), ]
 row.names(config_grid) <- NULL
 
-# Full-run defaults: 1000 replicates per config, split into 125 batches of 8.
+# Full-run defaults: 1000 replicates per config, split into 250 batches of 4.
 # Slurm launchers can override these for small test runs.
-batch_size <- as.integer(Sys.getenv("SIM_BATCH_SIZE", unset = "8"))
+batch_size <- as.integer(Sys.getenv("SIM_BATCH_SIZE", unset = "4"))
 sims_per_config <- as.integer(Sys.getenv("SIMS_PER_CONFIG", unset = "1000"))
 if (is.na(batch_size) || batch_size < 1) stop("SIM_BATCH_SIZE must be a positive integer.")
 if (is.na(sims_per_config) || sims_per_config < 1) stop("SIMS_PER_CONFIG must be a positive integer.")
