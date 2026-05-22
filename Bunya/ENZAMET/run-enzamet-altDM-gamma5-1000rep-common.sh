@@ -39,8 +39,9 @@ export SIM_OUTPUT_JOB_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
 export SIM_BATCH_SIZE=4
 export SIMS_PER_CONFIG=1000
 # Timeout is per replicate. With 8 cores, 4 replicates run in two waves of two;
-# 2h50m leaves enough room for both waves plus saveRDS before the 6h walltime.
-export SIM_SAFE_ELAPSED=10200
+# 2h55m gives borderline fits a little more room while preserving a saveRDS
+# buffer before the 6h walltime.
+export SIM_SAFE_ELAPSED=10500
 export SIM_STAN_MODEL_FILE="$HOME/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan"
 export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output"
 mkdir -p "$SIM_OUTPUT_DIR"
