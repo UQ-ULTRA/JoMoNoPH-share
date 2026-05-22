@@ -101,8 +101,9 @@ compute_waic_from_log_lik <- function(fit, log_lik_var = "log_lik") {
 # Set CmdStan path globally for main session
 set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
 
-# Load helper functions
-source("~/JoMoNoPH-share/Bunya/Auxiliary/BP-functions.R")
+# Historical BP helper functions are not used by the current ENZAMET-DM
+# simulation path; Stan data are built below by convert_data_*().
+# source("~/JoMoNoPH-share/Bunya/Auxiliary/BP-functions.R")
 # ENZAMET data generator will be sourced dynamically based on scenario parameter
 
 ##########
