@@ -383,6 +383,9 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   beta_long_mean <- nlme::fixef(fit_long)
   beta_long_sd <- rep(10, length(beta_long_mean))
   beta_surv_mean <- coef(fit_surv)[-1]  # omit intercept
+  # survreg() can occasionally return a non-finite staging coefficient without
+  # throwing an error. Use a neutral prior anchor rather than passing NA to Stan.
+  beta_surv_mean[!is.finite(beta_surv_mean)] <- 0
   beta_surv_sd <- rep(10, length(beta_surv_mean))
   
   vc_long <- VarCorr(fit_long)
@@ -474,6 +477,8 @@ convert_data_aft_only <- function(fit_surv,
   # Empirical priors (survival only)
   # -------------------------------------------------
   beta_surv_mean <- coef(fit_surv)[-1]
+  # Guard the staging prior mean only; the fitted Stan likelihood is unchanged.
+  beta_surv_mean[!is.finite(beta_surv_mean)] <- 0
   beta_surv_sd   <- rep(10, length(beta_surv_mean))
   
   s_surv <- summary(fit_surv)$scale
@@ -787,6 +792,13 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     stan_data_joint$gp_length_prior_beta <- 0.4
   }
   
+  safe_surv_beta_init <- function(fit, q, fallback_value = 0) {
+    # This protects Stan initial values from rare non-finite survreg()
+    # coefficients. It does not change the likelihood or posterior target.
+    beta <- tryCatch(as.numeric(coef(fit)[2]), error = function(e) NA_real_)
+    if (!is.finite(beta)) beta <- fallback_value
+    rep(beta, q)
+  }
   
   # Initialisation function for joint models
   init_fun_joint <- function(sim_dat, stan_data, chains = 4, joint_model_type = "BP") {
@@ -823,8 +835,14 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     
     # --- Estimate survival treatment effect using survreg() ---
     # This is used to initialise MCMC sampling
-    AFT <- survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival)
-    fallback$beta_surv <- rep(coef(AFT)[2], stan_data$q)
+    AFT <- tryCatch(
+      survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival),
+      error = function(e) NULL
+    )
+    
+    if (!is.null(AFT)) {
+      fallback$beta_surv <- safe_surv_beta_init(AFT, stan_data$q, fallback_value = 0)
+    }
     
     # --- Construct per-chain initial values ---
     # Adds small jitter to allow overdispersed starting values across chains
@@ -894,7 +912,7 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     
     if (!is.null(AFT)) {
       # treatment effect only (consistent with convert_data_aft_only)
-      fallback$beta_surv <- rep(coef(AFT)[2], stan_data$q)
+      fallback$beta_surv <- safe_surv_beta_init(AFT, stan_data$q, fallback_value = 0)
     }
     
     # ------------------------------------------------------------------
