@@ -40,8 +40,14 @@ export SIM_BATCH_SIZE=4
 export SIMS_PER_CONFIG=1000
 # Timeout is per replicate. With 8 cores, 4 replicates run in two waves of two;
 # 2h55m gives borderline fits a little more room while preserving a saveRDS
-# buffer before the 6h walltime.
-export SIM_SAFE_ELAPSED=10500
+# buffer before the 6h walltime. Rescue jobs can set SIM_SAFE_ELAPSED_OVERRIDE
+# before sourcing this file when a specific batch needs a longer per-replicate
+# limit.
+if [ -n "${SIM_SAFE_ELAPSED_OVERRIDE:-}" ]; then
+  export SIM_SAFE_ELAPSED="$SIM_SAFE_ELAPSED_OVERRIDE"
+else
+  export SIM_SAFE_ELAPSED=10500
+fi
 export SIM_STAN_MODEL_FILE="$HOME/JoMoNoPH-share/Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan"
 export SIM_OUTPUT_DIR="$HOME/JoMoNoPH-share/Bunya/ENZAMET/output"
 mkdir -p "$SIM_OUTPUT_DIR"
