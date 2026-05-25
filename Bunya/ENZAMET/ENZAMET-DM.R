@@ -379,14 +379,25 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   mf_surv$time_by_arm <- mf_surv$time * mf_surv$arm
   X_long_surv <- model.matrix(~ time + time_by_arm, data = mf_surv)
   
-  # --- Empirical prior components ---
+  # --- Prior and initialization components ---
   mf_long$X_long <- X_long  
-  beta_long_mean <- nlme::fixef(fit_long)
+  # Previous empirical prior centering:
+  # beta_long_mean <- nlme::fixef(fit_long)
+  #
+  # For cleaner simulation reporting, center regression coefficient priors at
+  # zero. The lme() estimates are still used later for Stan initial values only.
+  beta_long_mean <- rep(0, ncol(X_long))
   beta_long_sd <- rep(10, length(beta_long_mean))
-  beta_surv_mean <- coef(fit_surv)[-1]  # omit intercept
+  # Previous empirical prior centering:
+  # beta_surv_mean <- coef(fit_surv)[-1]  # omit intercept
+  #
+  # Use the exponential survreg() estimate only as an initialization anchor;
+  # keep the survival coefficient prior centered at zero.
+  beta_surv_init_mean <- coef(fit_surv)[-1]  # omit intercept
   # survreg() can occasionally return a non-finite staging coefficient without
-  # throwing an error. Use a neutral prior anchor rather than passing NA to Stan.
-  beta_surv_mean[!is.finite(beta_surv_mean)] <- 0
+  # throwing an error. Use a neutral initial-value anchor rather than passing NA.
+  beta_surv_init_mean[!is.finite(beta_surv_init_mean)] <- 0
+  beta_surv_mean <- rep(0, length(beta_surv_init_mean))
   beta_surv_sd <- rep(10, length(beta_surv_mean))
   
   vc_long <- VarCorr(fit_long)
@@ -433,6 +444,7 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
     beta_long_prior_scale = beta_long_sd,
     beta_surv_prior_mean = beta_surv_mean,
     beta_surv_prior_scale = beta_surv_sd,
+    beta_surv_init_mean = beta_surv_init_mean,
     sd_b_prior_mean = sd_b,
     sd_b_prior_scale = rep(5, length(sd_b)),
     s_long = s_long,
@@ -475,11 +487,16 @@ convert_data_aft_only <- function(fit_surv,
   X_surv <- model.matrix(~ 0 + arm, data = mf_surv)
   
   # -------------------------------------------------
-  # Empirical priors (survival only)
+  # Prior and initialization components (survival only)
   # -------------------------------------------------
-  beta_surv_mean <- coef(fit_surv)[-1]
-  # Guard the staging prior mean only; the fitted Stan likelihood is unchanged.
-  beta_surv_mean[!is.finite(beta_surv_mean)] <- 0
+  # Previous empirical prior centering:
+  # beta_surv_mean <- coef(fit_surv)[-1]
+  #
+  # Use the exponential survreg() estimate only as an initialization anchor;
+  # keep the survival coefficient prior centered at zero.
+  beta_surv_init_mean <- coef(fit_surv)[-1]
+  beta_surv_init_mean[!is.finite(beta_surv_init_mean)] <- 0
+  beta_surv_mean <- rep(0, length(beta_surv_init_mean))
   beta_surv_sd   <- rep(10, length(beta_surv_mean))
   
   s_surv <- summary(fit_surv)$scale
@@ -500,6 +517,7 @@ convert_data_aft_only <- function(fit_surv,
     # Priors
     beta_surv_prior_mean  = beta_surv_mean,
     beta_surv_prior_scale = beta_surv_sd,
+    beta_surv_init_mean   = beta_surv_init_mean,
     s_surv = s_surv,
     
     # Smoothing
@@ -793,12 +811,15 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     stan_data_joint$gp_length_prior_beta <- 0.4
   }
   
-  safe_surv_beta_init <- function(fit, q, fallback_value = 0) {
-    # This protects Stan initial values from rare non-finite survreg()
-    # coefficients. It does not change the likelihood or posterior target.
-    beta <- tryCatch(as.numeric(coef(fit)[2]), error = function(e) NA_real_)
-    if (!is.finite(beta)) beta <- fallback_value
-    rep(beta, q)
+  safe_surv_beta_init <- function(stan_data, fallback_value = 0) {
+    # beta_surv initial values come from beta_surv_init_mean, which is built
+    # from the survival staging fit survreg(..., dist = "exponential"). The
+    # prior itself is still centered at zero; this staging estimate is used only
+    # to help Stan initialize near a reasonable part of parameter space.
+    beta <- tryCatch(as.numeric(stan_data$beta_surv_init_mean), error = function(e) numeric(0))
+    if (length(beta) != stan_data$q) beta <- rep(fallback_value, stan_data$q)
+    beta[!is.finite(beta)] <- fallback_value
+    beta
   }
   
   # Initialisation function for joint models
@@ -834,16 +855,11 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     vc <- nlme::VarCorr(LMM)
     fallback$sd_1_long <- sqrt(as.numeric(vc[1:2, "Variance"]))
     
-    # --- Estimate survival treatment effect using survreg() ---
-    # This is used to initialise MCMC sampling
-    AFT <- tryCatch(
-      survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival),
-      error = function(e) NULL
-    )
-    
-    if (!is.null(AFT)) {
-      fallback$beta_surv <- safe_surv_beta_init(AFT, stan_data$q, fallback_value = 0)
-    }
+    # --- Survival treatment effect used only for initial values ---
+    # Reuse the exponential survreg() staging estimate already stored in
+    # stan_data$beta_surv_init_mean, rather than fitting a separate default
+    # Weibull survreg() model for initial values.
+    fallback$beta_surv <- safe_surv_beta_init(stan_data, fallback_value = 0)
     
     # --- Construct per-chain initial values ---
     # Adds small jitter to allow overdispersed starting values across chains
@@ -904,17 +920,12 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     )
     
     # ------------------------------------------------------------------
-    # 2. Empirical AFT initialisation
+    # 2. Empirical AFT initialisation only.
     # ------------------------------------------------------------------
-    AFT <- tryCatch(
-      survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival),
-      error = function(e) NULL
-    )
-    
-    if (!is.null(AFT)) {
-      # treatment effect only (consistent with convert_data_aft_only)
-      fallback$beta_surv <- safe_surv_beta_init(AFT, stan_data$q, fallback_value = 0)
-    }
+    # Reuse the exponential survreg() staging estimate already stored in
+    # stan_data$beta_surv_init_mean. This avoids fitting a separate
+    # default-Weibull model just for initial values.
+    fallback$beta_surv <- safe_surv_beta_init(stan_data, fallback_value = 0)
     
     # ------------------------------------------------------------------
     # 3. Per-chain initial values
@@ -966,6 +977,33 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   } else {
     init_values_joint <- init_fun_joint(sim_dat = sim_dat, stan_data = stan_data_joint, chains = chains, joint_model_type = joint_model_type)
   }
+
+  # Save compact initial-value audit information. We keep the jittered
+  # coefficient/scalar starts passed to Stan, but intentionally omit z_1_long
+  # because it is a large random-effects matrix and would unnecessarily bloat
+  # every replicate RDS file.
+  compact_init_values <- function(init_values) {
+    lapply(seq_along(init_values), function(chain_id) {
+      init_chain <- init_values[[chain_id]]
+      keep_names <- intersect(
+        c(
+          "beta_long", "beta_surv", "alpha_tilde", "gamma",
+          "sigma_long", "sd_1_long", "L_1_long",
+          "gp_length_scale", "gp_marginal_sd", "f_gp_raw",
+          "a", "log_b"
+        ),
+        names(init_chain)
+      )
+      kept <- init_chain[keep_names]
+      kept$chain <- chain_id
+      kept
+    })
+  }
+  init_info <- list(
+    note = "Jittered Stan initial values by chain; z_1_long omitted to avoid storing a large random-effects matrix.",
+    values = compact_init_values(init_values_joint)
+  )
+
   # ========== Fit Joint Model (BP, GB, GB_Quantile, or GP) ==========
   t_compile_joint_start <- Sys.time()
   mod_joint <- cmdstan_model(stan_model_file_joint,
@@ -1077,6 +1115,57 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
     data.frame(elpd_waic = NA, p_waic = NA, waic = NA)
   }
 
+  stan_data_field <- function(name, default = NULL) {
+    if (name %in% names(stan_data_joint)) stan_data_joint[[name]] else default
+  }
+  as_numeric_unnamed <- function(x) {
+    if (is.null(x)) return(numeric(0))
+    unname(as.numeric(x))
+  }
+
+  s_long_saved <- as_numeric_unnamed(stan_data_field("s_long", NA_real_))[1]
+  s_surv_saved <- as_numeric_unnamed(stan_data_field("s_surv", NA_real_))[1]
+  alpha_tilde_sd_saved <- as_numeric_unnamed(stan_data_field("alpha_tilde_sd", NA_real_))[1]
+  alpha_prior_sd_raw <- if (
+    is.finite(s_long_saved) && is.finite(s_surv_saved) &&
+      is.finite(alpha_tilde_sd_saved) && s_long_saved != 0
+  ) {
+    # Stan uses alpha = alpha_tilde * (s_surv / s_long), so this is the
+    # implied prior SD on the unstandardised association parameter alpha.
+    alpha_tilde_sd_saved * s_surv_saved / s_long_saved
+  } else {
+    NA_real_
+  }
+  beta_long_prior_mean_centered <- as_numeric_unnamed(stan_data_field("beta_long_prior_mean"))
+  beta_long_prior_mean_raw <- beta_long_prior_mean_centered
+  if (length(beta_long_prior_mean_raw) >= 1 &&
+      is.finite(longitudinal_response_center) &&
+      longitudinal_response_center != 0) {
+    beta_long_prior_mean_raw[1] <- beta_long_prior_mean_raw[1] +
+      longitudinal_response_center
+  }
+
+  # Save empirical prior inputs for later reviewer-facing sensitivity checks.
+  # These values are used only to construct priors/initial anchors; recording
+  # them here does not change the likelihood or posterior target.
+  prior_info <- list(
+    longitudinal_response_center = longitudinal_response_center,
+    s_long = s_long_saved,
+    s_surv = s_surv_saved,
+    alpha_tilde_prior_mean = 0,
+    alpha_tilde_sd = alpha_tilde_sd_saved,
+    alpha_prior_mean_raw = 0,
+    alpha_prior_sd_raw = alpha_prior_sd_raw,
+    beta_long_prior_mean = beta_long_prior_mean_centered,
+    beta_long_prior_mean_raw = beta_long_prior_mean_raw,
+    beta_long_prior_scale = as_numeric_unnamed(stan_data_field("beta_long_prior_scale")),
+    beta_surv_prior_mean = as_numeric_unnamed(stan_data_field("beta_surv_prior_mean")),
+    beta_surv_prior_scale = as_numeric_unnamed(stan_data_field("beta_surv_prior_scale")),
+    beta_surv_init_mean = as_numeric_unnamed(stan_data_field("beta_surv_init_mean")),
+    sd_b_prior_mean = as_numeric_unnamed(stan_data_field("sd_b_prior_mean")),
+    sd_b_prior_scale = as_numeric_unnamed(stan_data_field("sd_b_prior_scale"))
+  )
+
   logy_support <- NULL
   if (all(c("log_y_lower", "log_y_upper") %in% names(stan_data_joint))) {
     logy_support <- list(
@@ -1125,6 +1214,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       logy_support = logy_support,
       baseline_recon = baseline_recon,
       runtimes = runtimes,
+      prior_info = prior_info,
+      init_info = init_info,
       loo_joint = loo_joint_est,
       waic_joint = waic_joint_est))
   } else {
@@ -1144,6 +1235,8 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
       logy_support = logy_support,
       baseline_recon = baseline_recon,
       runtimes = runtimes,
+      prior_info = prior_info,
+      init_info = init_info,
       loo_joint = loo_joint_est,
       waic_joint = waic_joint_est))
   }
