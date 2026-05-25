@@ -72,7 +72,7 @@ if (has_aft_only_models && !all_models_are_aft_only) {
 ##########
 
 bunya <- FALSE
-analysis_output_dir <- here::here("Bunya", "ENZAMET", "output_local_penalty_fixed_seed5") # Set manually to pin one run; empty means use newest output_* folder.
+analysis_output_dir <- here::here("Bunya", "ENZAMET", "output_20260523_test_100rep_W210_centered_td10_gamma5_altDM_zeroprior_initinfo") # Set manually to pin one run; empty means use newest output_* folder.
 
 find_latest_output_dir <- function(base_dir) {
   output_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)
@@ -279,6 +279,178 @@ parse_config <- function(config_str) {
   )
 }
 
+parse_batch_number <- function(path) {
+  batch_match <- stringr::str_match(basename(path), "_batch(\\d+)\\.rds$")
+  if (is.na(batch_match[1, 1])) return(NA_integer_)
+  as.integer(batch_match[1, 2])
+}
+
+summarise_runtime_table <- function(runtime_df, config_label = NULL) {
+  expected_cols <- c(
+    "total_time_min", "joint_stan_time_min", "lme_time_min",
+    "joint_compile_time_min"
+  )
+  if (is.null(runtime_df) || nrow(runtime_df) == 0) {
+    runtime_df <- tibble::tibble(
+      total_time_min = numeric(),
+      joint_stan_time_min = numeric(),
+      lme_time_min = numeric(),
+      joint_compile_time_min = numeric()
+    )
+  } else {
+    for (col in expected_cols) {
+      if (!col %in% names(runtime_df)) runtime_df[[col]] <- NA_real_
+    }
+  }
+
+  stat_or_na <- function(x, fun) {
+    x <- x[is.finite(x)]
+    if (length(x) == 0) return(NA_real_)
+    fun(x)
+  }
+
+  out <- tibble::tibble(
+    n_sims_with_runtime = if (is.null(runtime_df) || nrow(runtime_df) == 0) {
+      0L
+    } else {
+      sum(is.finite(runtime_df$total_time_min))
+    },
+    mean_total_time_min = stat_or_na(runtime_df$total_time_min, mean),
+    median_total_time_min = stat_or_na(runtime_df$total_time_min, stats::median),
+    sd_total_time_min = stat_or_na(runtime_df$total_time_min, stats::sd),
+    min_total_time_min = stat_or_na(runtime_df$total_time_min, min),
+    max_total_time_min = stat_or_na(runtime_df$total_time_min, max),
+    q90_total_time_min = stat_or_na(
+      runtime_df$total_time_min,
+      function(x) stats::quantile(x, 0.90, names = FALSE)
+    ),
+    q95_total_time_min = stat_or_na(
+      runtime_df$total_time_min,
+      function(x) stats::quantile(x, 0.95, names = FALSE)
+    ),
+    mean_joint_stan_time_min = stat_or_na(runtime_df$joint_stan_time_min, mean),
+    max_joint_stan_time_min = stat_or_na(runtime_df$joint_stan_time_min, max),
+    mean_lme_time_min = stat_or_na(runtime_df$lme_time_min, mean),
+    mean_joint_compile_time_min = stat_or_na(runtime_df$joint_compile_time_min, mean)
+  )
+
+  if (!is.null(config_label)) {
+    out <- dplyr::bind_cols(tibble::tibble(config = config_label), out)
+  }
+  out
+}
+
+empty_prior_info_per_sim <- function() {
+  tibble::tibble(
+    sim_id = integer(),
+    unique_seed = numeric(),
+    longitudinal_response_center = numeric(),
+    s_long = numeric(),
+    s_surv = numeric(),
+    alpha_tilde_prior_mean = numeric(),
+    alpha_tilde_sd = numeric(),
+    alpha_prior_mean_raw = numeric(),
+    alpha_prior_sd_raw = numeric(),
+    beta_long_prior_mean_1 = numeric(),
+    beta_long_prior_mean_2 = numeric(),
+    beta_long_prior_mean_3 = numeric(),
+    beta_long_prior_mean_raw_1 = numeric(),
+    beta_long_prior_mean_raw_2 = numeric(),
+    beta_long_prior_mean_raw_3 = numeric(),
+    beta_long_prior_scale_1 = numeric(),
+    beta_long_prior_scale_2 = numeric(),
+    beta_long_prior_scale_3 = numeric(),
+    beta_surv_prior_mean_1 = numeric(),
+    beta_surv_prior_scale_1 = numeric(),
+    sd_b_prior_mean_1 = numeric(),
+    sd_b_prior_mean_2 = numeric(),
+    sd_b_prior_scale_1 = numeric(),
+    sd_b_prior_scale_2 = numeric()
+  )
+}
+
+safe_prior_scalar <- function(x) {
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) == 0) return(NA_real_)
+  x[1]
+}
+
+prior_vector_cols <- function(x, prefix, n) {
+  vals <- rep(NA_real_, n)
+  x <- suppressWarnings(as.numeric(x))
+  if (length(x) > 0) {
+    n_fill <- min(length(x), n)
+    vals[seq_len(n_fill)] <- x[seq_len(n_fill)]
+  }
+  tibble::as_tibble_row(stats::setNames(as.list(vals), paste0(prefix, seq_len(n))))
+}
+
+extract_prior_info_row <- function(sim, idx) {
+  prior_info <- sim$prior_info
+  if (is.null(prior_info)) return(NULL)
+
+  dplyr::bind_cols(
+    tibble::tibble(
+      sim_id = idx,
+      unique_seed = sim$unique_seed,
+      longitudinal_response_center = safe_prior_scalar(prior_info$longitudinal_response_center),
+      s_long = safe_prior_scalar(prior_info$s_long),
+      s_surv = safe_prior_scalar(prior_info$s_surv),
+      alpha_tilde_prior_mean = safe_prior_scalar(prior_info$alpha_tilde_prior_mean),
+      alpha_tilde_sd = safe_prior_scalar(prior_info$alpha_tilde_sd),
+      alpha_prior_mean_raw = safe_prior_scalar(prior_info$alpha_prior_mean_raw),
+      alpha_prior_sd_raw = safe_prior_scalar(prior_info$alpha_prior_sd_raw)
+    ),
+    prior_vector_cols(prior_info$beta_long_prior_mean, "beta_long_prior_mean_", 3),
+    prior_vector_cols(prior_info$beta_long_prior_mean_raw, "beta_long_prior_mean_raw_", 3),
+    prior_vector_cols(prior_info$beta_long_prior_scale, "beta_long_prior_scale_", 3),
+    prior_vector_cols(prior_info$beta_surv_prior_mean, "beta_surv_prior_mean_", 1),
+    prior_vector_cols(prior_info$beta_surv_prior_scale, "beta_surv_prior_scale_", 1),
+    prior_vector_cols(prior_info$sd_b_prior_mean, "sd_b_prior_mean_", 2),
+    prior_vector_cols(prior_info$sd_b_prior_scale, "sd_b_prior_scale_", 2)
+  )
+}
+
+summarise_prior_info_table <- function(prior_info_df, config_label = NULL) {
+  if (is.null(prior_info_df) || nrow(prior_info_df) == 0) {
+    out <- tibble::tibble(n_sims_with_prior_info = 0L)
+    if (!is.null(config_label)) {
+      out <- dplyr::bind_cols(tibble::tibble(config = config_label), out)
+    }
+    return(out)
+  }
+
+  stat_or_na <- function(x, fun) {
+    x <- x[is.finite(x)]
+    if (length(x) == 0) return(NA_real_)
+    fun(x)
+  }
+
+  numeric_cols <- setdiff(names(prior_info_df), c("sim_id", "unique_seed"))
+  summary_cols <- purrr::map(
+    numeric_cols,
+    function(col) {
+      x <- prior_info_df[[col]]
+      tibble::tibble(
+        !!paste0(col, "_mean") := stat_or_na(x, mean),
+        !!paste0(col, "_median") := stat_or_na(x, stats::median),
+        !!paste0(col, "_sd") := stat_or_na(x, stats::sd),
+        !!paste0(col, "_min") := stat_or_na(x, min),
+        !!paste0(col, "_max") := stat_or_na(x, max)
+      )
+    }
+  )
+
+  out <- dplyr::bind_cols(
+    tibble::tibble(n_sims_with_prior_info = nrow(prior_info_df)),
+    !!!summary_cols
+  )
+  if (!is.null(config_label)) {
+    out <- dplyr::bind_cols(tibble::tibble(config = config_label), out)
+  }
+  out
+}
+
 parse_short_config <- function(lbl) {
   m <- stringr::str_match(lbl, "^([A-Za-z_]+)\\s+k=(\\d+),\\s+c=([A-Za-z0-9]+)%?(?:,\\s+d=([^,]+))?,\\s+S(\\d+)$")
   if (is.na(m[1,1])) {
@@ -344,14 +516,66 @@ process_simulation_results <- function(bf, k_bases, n, cens, baseline_label, dis
     message("No matching files found for: ", pattern)
     return(NULL)
   }
+  rds_files <- sort(rds_files)
+
   # browser()
-  # ---- Read all batches; flatten to one list of sims; drop NULLs (timeouts/failures)
-  raw_sims <- rds_files %>%
-    purrr::map(readRDS) %>%
-    purrr::flatten()
-  n_raw_sims <- length(raw_sims)
-  n_failed_sims <- sum(vapply(raw_sims, is.null, logical(1)))
-  sims <- purrr::compact(raw_sims)
+  # ---- Read all batches while preserving batch/replicate positions.
+  # Failed/time-limited replicates are saved as NULL entries; if we compact first,
+  # their exact batch and within-batch position are lost.
+  batch_contents <- purrr::map(rds_files, readRDS)
+  batch_sizes <- vapply(batch_contents, length, integer(1))
+  nominal_batch_size <- if (length(batch_sizes) == 0 || max(batch_sizes, na.rm = TRUE) == 0) {
+    NA_integer_
+  } else {
+    max(batch_sizes, na.rm = TRUE)
+  }
+  batch_records <- purrr::imap_dfr(batch_contents, function(batch_sims, batch_idx) {
+    batch_file <- rds_files[[batch_idx]]
+    batch_number <- parse_batch_number(batch_file)
+    if (length(batch_sims) == 0) {
+      return(tibble::tibble(
+        batch_file = basename(batch_file),
+        batch_number = batch_number,
+        position_in_batch = NA_integer_,
+        replicate_in_config = NA_integer_,
+        is_null = is.null(batch_sims),
+        sim = list(NULL)
+      ))
+    }
+
+    purrr::map_dfr(seq_along(batch_sims), function(pos) {
+      sim <- batch_sims[[pos]]
+      replicate_in_config <- if (is.na(batch_number) || is.na(nominal_batch_size)) {
+        NA_integer_
+      } else {
+        (batch_number - 1L) * nominal_batch_size + pos
+      }
+
+      tibble::tibble(
+        batch_file = basename(batch_file),
+        batch_number = batch_number,
+        position_in_batch = pos,
+        replicate_in_config = replicate_in_config,
+        is_null = is.null(sim),
+        sim = list(sim)
+      )
+    })
+  })
+
+  n_raw_sims <- nrow(batch_records)
+  n_failed_sims <- sum(batch_records$is_null, na.rm = TRUE)
+  failed_replicates <- batch_records %>%
+    dplyr::filter(is_null) %>%
+    dplyr::transmute(
+      batch_file,
+      batch_number,
+      position_in_batch,
+      replicate_in_config,
+      failure_type = "null_saved_replicate"
+    )
+  sims <- batch_records %>%
+    dplyr::filter(!is_null) %>%
+    dplyr::pull(sim)
   
   if (length(sims) == 0) {
     message("All simulations were NULL/failed for: ", pattern)
@@ -371,6 +595,14 @@ process_simulation_results <- function(bf, k_bases, n, cens, baseline_label, dis
       max_rhat = numeric(), mean_rhat = numeric(), median_rhat = numeric(),
       sd_rhat = numeric(), n_rhat_gt_1_01 = numeric(), n_rhat_gt_1_05 = numeric()
     )
+    empty_runtime_per_sim <- tibble::tibble(
+      sim_id = integer(), unique_seed = numeric(), lme_time_sec = numeric(),
+      joint_compile_time_sec = numeric(), joint_stan_time_sec = numeric(),
+      total_time_sec = numeric(), lme_time_min = numeric(),
+      joint_compile_time_min = numeric(), joint_stan_time_min = numeric(),
+      total_time_min = numeric()
+    )
+    empty_prior_info_per_sim_tbl <- empty_prior_info_per_sim()
     return(list(
       fig           = NULL,
       table         = NULL,
@@ -392,6 +624,24 @@ process_simulation_results <- function(bf, k_bases, n, cens, baseline_label, dis
         n_failed_sims = n_failed_sims,
         n_valid_sims = 0L
       ),
+      runtime_per_sim = empty_runtime_per_sim,
+      runtime_summary = tibble::tibble(
+        n_sims_with_runtime = 0L,
+        mean_total_time_min = NA_real_,
+        median_total_time_min = NA_real_,
+        sd_total_time_min = NA_real_,
+        min_total_time_min = NA_real_,
+        max_total_time_min = NA_real_,
+        q90_total_time_min = NA_real_,
+        q95_total_time_min = NA_real_,
+        mean_joint_stan_time_min = NA_real_,
+        max_joint_stan_time_min = NA_real_,
+        mean_lme_time_min = NA_real_,
+        mean_joint_compile_time_min = NA_real_
+      ),
+      prior_info_per_sim = empty_prior_info_per_sim_tbl,
+      prior_info_summary = summarise_prior_info_table(empty_prior_info_per_sim_tbl),
+      failed_replicates = failed_replicates,
       beta_saft_raw     = NULL,
       beta_saft_summary = NULL
     ))
@@ -528,6 +778,44 @@ process_simulation_results <- function(bf, k_bases, n, cens, baseline_label, dis
       n_failed_sims = n_failed_sims,
       n_valid_sims = length(sims)
     )
+
+  # ---- Extract runtime information saved by ENZAMET-DM.R.
+  # Times are stored in seconds in each replicate; summaries below report minutes
+  # because those are easier to interpret for SLURM planning.
+  runtime_per_sim <- purrr::imap_dfr(sims, function(sim, idx) {
+    rt <- sim$runtimes
+    if (is.null(rt) || nrow(rt) == 0) return(NULL)
+
+    lme_time <- if ("lme_time" %in% names(rt)) as.numeric(rt$lme_time[1]) else NA_real_
+    joint_compile_time <- if ("joint_compile_time" %in% names(rt)) as.numeric(rt$joint_compile_time[1]) else NA_real_
+    joint_stan_time <- if ("joint_stan_time" %in% names(rt)) as.numeric(rt$joint_stan_time[1]) else NA_real_
+    total_time <- if ("total_time" %in% names(rt)) as.numeric(rt$total_time[1]) else NA_real_
+
+    tibble::tibble(
+      sim_id = idx,
+      unique_seed = sim$unique_seed,
+      lme_time_sec = lme_time,
+      joint_compile_time_sec = joint_compile_time,
+      joint_stan_time_sec = joint_stan_time,
+      total_time_sec = total_time,
+      lme_time_min = lme_time / 60,
+      joint_compile_time_min = joint_compile_time / 60,
+      joint_stan_time_min = joint_stan_time / 60,
+      total_time_min = total_time / 60
+    )
+  })
+
+  runtime_summary <- summarise_runtime_table(runtime_per_sim)
+
+  # ---- Extract empirical prior/calibration information saved by ENZAMET-DM.R.
+  # This is mainly for reviewer-facing sensitivity checks of alpha and staging
+  # priors. These fields document the priors used for fitting; they are not
+  # posterior estimates.
+  prior_info_per_sim <- purrr::imap_dfr(sims, extract_prior_info_row)
+  if (nrow(prior_info_per_sim) == 0) {
+    prior_info_per_sim <- empty_prior_info_per_sim()
+  }
+  prior_info_summary <- summarise_prior_info_table(prior_info_per_sim)
   
   
   # Filter parameters of interest (including GP-specific parameters)
@@ -639,6 +927,11 @@ process_simulation_results <- function(bf, k_bases, n, cens, baseline_label, dis
     summary       = combined_summary, # aggregated table (Stan only)
     diag_per_sim  = diag_per_sim,    # NEW
     diag_summary  = diag_summary,    # NEW
+    runtime_per_sim = runtime_per_sim,
+    runtime_summary = runtime_summary,
+    prior_info_per_sim = prior_info_per_sim,
+    prior_info_summary = prior_info_summary,
+    failed_replicates = failed_replicates,
     beta_saft_raw    = beta_saft_per_sim,     # NEW
     beta_saft_summary = beta_saft_summary     # NEW
   )
@@ -758,6 +1051,104 @@ readr::write_csv(
 saveRDS(
   all_diag_per_sim,
   file.path(summary_dir, paste0("jm_diagnostic_per_sim_", analysis_dist_file, ".rds"))
+)
+
+# ---- Failed/null replicate locations for rescue checks
+all_failed_replicates <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$failed_replicates, config = .y, .before = 1)
+)
+
+readr::write_csv(
+  all_failed_replicates,
+  file.path(summary_dir, paste0("jm_failed_null_replicates_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_failed_replicates,
+  file.path(summary_dir, paste0("jm_failed_null_replicates_", analysis_dist_file, ".rds"))
+)
+
+# ---- Runtime summaries across configurations
+all_runtime_per_sim <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$runtime_per_sim, config = .y)
+)
+
+all_runtime_summary <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$runtime_summary, config = .y)
+)
+
+overall_runtime_summary <- summarise_runtime_table(all_runtime_per_sim, config_label = "OVERALL")
+
+all_runtime_summary_with_overall <- dplyr::bind_rows(
+  all_runtime_summary,
+  overall_runtime_summary
+)
+
+readr::write_csv(
+  all_runtime_per_sim,
+  file.path(summary_dir, paste0("jm_runtime_per_sim_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_runtime_per_sim,
+  file.path(summary_dir, paste0("jm_runtime_per_sim_", analysis_dist_file, ".rds"))
+)
+readr::write_csv(
+  all_runtime_summary_with_overall,
+  file.path(summary_dir, paste0("jm_runtime_summary_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_runtime_summary_with_overall,
+  file.path(summary_dir, paste0("jm_runtime_summary_", analysis_dist_file, ".rds"))
+)
+
+# ---- Empirical prior/calibration information across configurations
+all_prior_info_per_sim <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$prior_info_per_sim, config = .y, .before = 1)
+)
+
+all_prior_info_summary <- purrr::map2_dfr(
+  results_by_config,
+  names(results_by_config),
+  ~ dplyr::mutate(.x$prior_info_summary, config = .y)
+)
+
+overall_prior_info_input <- if ("config" %in% names(all_prior_info_per_sim)) {
+  dplyr::select(all_prior_info_per_sim, -config)
+} else {
+  all_prior_info_per_sim
+}
+overall_prior_info_summary <- summarise_prior_info_table(
+  overall_prior_info_input,
+  config_label = "OVERALL"
+)
+
+all_prior_info_summary_with_overall <- dplyr::bind_rows(
+  all_prior_info_summary,
+  overall_prior_info_summary
+)
+
+readr::write_csv(
+  all_prior_info_per_sim,
+  file.path(summary_dir, paste0("jm_prior_info_per_sim_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_prior_info_per_sim,
+  file.path(summary_dir, paste0("jm_prior_info_per_sim_", analysis_dist_file, ".rds"))
+)
+readr::write_csv(
+  all_prior_info_summary_with_overall,
+  file.path(summary_dir, paste0("jm_prior_info_summary_", analysis_dist_file, ".csv"))
+)
+saveRDS(
+  all_prior_info_summary_with_overall,
+  file.path(summary_dir, paste0("jm_prior_info_summary_", analysis_dist_file, ".rds"))
 )
 
 shorten_config_1 <- function(config) {
@@ -1241,6 +1632,20 @@ if (nrow(all_filtered_data) > 0) {
     )
   }
   
+  # The combined posterior-mean figure uses one facet per parameter and all
+  # scenarios on the x-axis. For scenario-varying parameters, draw all distinct
+  # true values observed in the plotted configs as red dashed horizontal lines.
+  plotted_scenarios <- tibble::tibble(config = unique(all_filtered_data$config)) %>%
+    dplyr::mutate(parsed = purrr::map(config, parse_short_config)) %>%
+    tidyr::unnest(parsed) %>%
+    dplyr::filter(!is.na(scenario)) %>%
+    dplyr::distinct(scenario) %>%
+    dplyr::pull(scenario)
+  
+  scenario_reference_lines_plot <- scenario_refs %>%
+    dplyr::filter(scenario %in% plotted_scenarios) %>%
+    dplyr::distinct(variable, reference)
+  
   # Shared palette - for BP/GB combinations
   # Generate 84 distinct colors (7 scenarios × 2 censoring × 2 basis × 3 k values)
   custom_palette <- grDevices::hcl.colors(max(length(desired_order), 1), palette = "Dynamic")
@@ -1279,6 +1684,15 @@ if (nrow(all_filtered_data) > 0) {
     # Add reference lines for non-scenario-specific parameters
     ggplot2::geom_hline(
       data = reference_lines_plot %>%
+        dplyr::mutate(variable = factor(variable, levels = var_order)),
+      ggplot2::aes(yintercept = reference),
+      color = "red", linetype = "dashed", linewidth = 0.6
+    ) +
+    # Add multiple reference lines for scenario-specific true values:
+    # beta_long[3] and beta_surv[1] vary by scenario, so a single line would
+    # be misleading in the combined ENZAMET figure.
+    ggplot2::geom_hline(
+      data = scenario_reference_lines_plot %>%
         dplyr::mutate(variable = factor(variable, levels = var_order)),
       ggplot2::aes(yintercept = reference),
       color = "red", linetype = "dashed", linewidth = 0.6
