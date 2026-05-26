@@ -41,7 +41,7 @@ export SIM_OUTPUT_JOB_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
 export SIM_BATCH_SIZE=4
 export SIMS_PER_CONFIG=1000
 # Timeout is per replicate. With 8 cores, 4 replicates run in two waves of two;
-# 2h55m preserves a saveRDS buffer before the 6h walltime. Rescue jobs can set
+# 2h40m preserves a saveRDS buffer before the 5h30m walltime. Rescue jobs can set
 # SIM_SAFE_ELAPSED_OVERRIDE before sourcing this file if needed.
 if [ -n "${SIM_SAFE_ELAPSED_OVERRIDE:-}" ]; then
   export SIM_SAFE_ELAPSED="$SIM_SAFE_ELAPSED_OVERRIDE"
