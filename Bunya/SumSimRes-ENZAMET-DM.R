@@ -72,7 +72,7 @@ if (has_aft_only_models && !all_models_are_aft_only) {
 ##########
 
 bunya <- FALSE
-analysis_output_dir <- here::here("Bunya", "ENZAMET", "output_20260523_test_100rep_W210_centered_td10_gamma5_altDM_zeroprior_initinfo") # Set manually to pin one run; empty means use newest output_* folder.
+analysis_output_dir <- here::here("Bunya", "ENZAMET", "output_20260525_ENZAMET-altDM-gamma5-1000rep-zeroprior-initinfo") # Set manually to pin one run; empty means use newest output_* folder.
 
 find_latest_output_dir <- function(base_dir) {
   output_dirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)
@@ -347,6 +347,9 @@ empty_prior_info_per_sim <- function() {
     longitudinal_response_center = numeric(),
     s_long = numeric(),
     s_surv = numeric(),
+    alpha_prior_delta_y = numeric(),
+    alpha_prior_max_f = numeric(),
+    alpha_prior_sd_target = numeric(),
     alpha_tilde_prior_mean = numeric(),
     alpha_tilde_sd = numeric(),
     alpha_prior_mean_raw = numeric(),
@@ -396,6 +399,9 @@ extract_prior_info_row <- function(sim, idx) {
       longitudinal_response_center = safe_prior_scalar(prior_info$longitudinal_response_center),
       s_long = safe_prior_scalar(prior_info$s_long),
       s_surv = safe_prior_scalar(prior_info$s_surv),
+      alpha_prior_delta_y = safe_prior_scalar(prior_info$alpha_prior_delta_y),
+      alpha_prior_max_f = safe_prior_scalar(prior_info$alpha_prior_max_f),
+      alpha_prior_sd_target = safe_prior_scalar(prior_info$alpha_prior_sd_target),
       alpha_tilde_prior_mean = safe_prior_scalar(prior_info$alpha_tilde_prior_mean),
       alpha_tilde_sd = safe_prior_scalar(prior_info$alpha_tilde_sd),
       alpha_prior_mean_raw = safe_prior_scalar(prior_info$alpha_prior_mean_raw),
@@ -1641,6 +1647,27 @@ if (nrow(all_filtered_data) > 0) {
     dplyr::filter(!is.na(scenario)) %>%
     dplyr::distinct(scenario) %>%
     dplyr::pull(scenario)
+
+  plotted_censoring_title <- tibble::tibble(config = unique(all_filtered_data$config)) %>%
+    dplyr::mutate(parsed = purrr::map(config, parse_short_config)) %>%
+    tidyr::unnest(parsed) %>%
+    dplyr::filter(!is.na(cens)) %>%
+    dplyr::distinct(cens) %>%
+    dplyr::mutate(
+      cens_order = dplyr::case_when(
+        cens == "admin" ~ 999,
+        suppressWarnings(!is.na(as.numeric(cens))) ~ suppressWarnings(as.numeric(cens)),
+        TRUE ~ 998
+      ),
+      cens_title = dplyr::case_when(
+        cens == "admin" ~ "Admin",
+        stringr::str_detect(cens, "^\\d+$") ~ paste0(cens, "%"),
+        TRUE ~ cens
+      )
+    ) %>%
+    dplyr::arrange(cens_order, cens_title) %>%
+    dplyr::pull(cens_title) %>%
+    paste(collapse = "/")
   
   scenario_reference_lines_plot <- scenario_refs %>%
     dplyr::filter(scenario %in% plotted_scenarios) %>%
@@ -1661,6 +1688,26 @@ if (nrow(all_filtered_data) > 0) {
   
   # Desired facet order
   var_order <- reference_lines$variable
+  # Use plotmath expressions for manuscript-style facet strips in the main
+  # posterior-mean figure. `as_labeller(..., default = label_parsed)` is
+  # important: it parses the mapped strings (e.g. beta[0]) into Greek symbols
+  # rather than printing them literally.
+  posterior_mean_facet_labels <- c(
+    "beta_long[1]" = "beta[0]",
+    "beta_long[2]" = "beta[1]",
+    "beta_long[3]" = "beta[2]",
+    "sd_1_long[1]" = "sigma[b[0]]",
+    "sd_1_long[2]" = "sigma[b[1]]",
+    "sigma_long"   = "sigma[epsilon]",
+    "beta_surv[1]" = "gamma",
+    "alpha"        = "alpha"
+  )
+  posterior_mean_labeller <- ggplot2::labeller(
+    variable = ggplot2::as_labeller(
+      posterior_mean_facet_labels,
+      default = ggplot2::label_parsed
+    )
+  )
   
   
   #### Distribution-specific figures ####
@@ -1678,7 +1725,8 @@ if (nrow(all_filtered_data) > 0) {
     ggplot2::facet_wrap(
       ~ variable,
       scales = "free_y",
-      drop = FALSE   # keep empty facets if any levels missing
+      drop = FALSE,   # keep empty facets if any levels missing
+      labeller = posterior_mean_labeller
     ) +
     ggplot2::scale_fill_manual(values = custom_palette) +
     # Add reference lines for non-scenario-specific parameters
@@ -1707,7 +1755,7 @@ if (nrow(all_filtered_data) > 0) {
     ggplot2::labs(
       x = "Configuration",
       y = "Posterior Mean",
-      title = paste0("Posterior Means - ENZAMET (", analysis_dist_title, ", 5 Scenarios, 0%/50%/Admin Censoring)")
+      title = paste0("Posterior Means - ENZAMET (", analysis_dist_title, ", 5 Scenarios, ", plotted_censoring_title, " Censoring)")
     )
   
   print(fig_1)
@@ -2027,7 +2075,7 @@ message("\n=== BASELINE HAZARD ESTIMATION COMPLETE ===\n")
 #   beta_long[1] -> beta_0
 #   beta_long[2] -> beta_1
 #   beta_long[3] -> beta_2
-#   beta_surv[1] -> gamma_1   (as per your supplied truth table)
+#   beta_surv[1] -> gamma     (single survival coefficient)
 #   alpha        -> alpha
 #
 # REQUIRES in environment:
@@ -2053,7 +2101,7 @@ param_labels <- c(
   "beta_long[1]" = "beta[0]",
   "beta_long[2]" = "beta[1]",
   "beta_long[3]" = "beta[2]",
-  "beta_surv[1]" = "gamma[1]"
+  "beta_surv[1]" = "gamma"
 )
 
 # True values (scenarios 1–5) using exactly what you supplied
@@ -2192,7 +2240,10 @@ facet_labeller <- ggplot2::labeller(
 p_bias <- ggplot(perf_sim, aes(x = Scenario, y = bias)) +
   geom_boxplot(outlier.size = 0.4) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  # Put Parameter on rows so free_y is parameter-specific. In facet_grid(),
+  # free_y is shared within a row; the old Cens + Baseline rows let beta[0]
+  # dominate the y-scale and visually flatten alpha/gamma/slope panels.
+  facet_grid(Parameter ~ Cens + Baseline, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -2203,7 +2254,7 @@ p_bias <- ggplot(perf_sim, aes(x = Scenario, y = bias)) +
 # Absolute error distribution (NOT RMSE)
 p_abserr <- ggplot(perf_sim, aes(x = Scenario, y = abs_err)) +
   geom_boxplot(outlier.size = 0.4) +
-  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Parameter ~ Cens + Baseline, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -2213,7 +2264,7 @@ p_abserr <- ggplot(perf_sim, aes(x = Scenario, y = abs_err)) +
 
 # True RMSE is a group summary (one value per Scenario × Cens × Parameter × k)
 rmse_sum <- perf_sim %>%
-  group_by(Parameter, Baseline, Scenario, Cens, k) %>%
+  group_by(Parameter, Dist, Baseline, Scenario, Cens, k) %>%
   summarise(
     rmse = sqrt(mean(sq_error)),
     .groups = "drop"
@@ -2221,7 +2272,7 @@ rmse_sum <- perf_sim %>%
 
 p_rmse <- ggplot(rmse_sum, aes(x = Scenario, y = rmse, group = k)) +
   geom_point(position = position_dodge(width = 0.35)) +
-  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Parameter ~ Cens + Baseline, scales = "free_y", labeller = facet_labeller) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -2231,7 +2282,7 @@ p_rmse <- ggplot(rmse_sum, aes(x = Scenario, y = rmse, group = k)) +
 
 # Coverage summary + CI (binomial normal approx)
 cov_sum <- perf_sim %>%
-  group_by(Parameter, Baseline, Scenario, Cens, k) %>%
+  group_by(Parameter, Dist, Baseline, Scenario, Cens, k) %>%
   summarise(
     coverage = mean(covered),
     n = n(),
@@ -2249,7 +2300,11 @@ p_cov <- ggplot(cov_sum, aes(x = Scenario, y = coverage, group = k)) +
     position = position_dodge(width = 0.35)
   ) +
   geom_hline(yintercept = 0.95, linetype = "dashed") +
-  facet_grid(Cens + Baseline ~ Parameter, scales = "free_y", labeller = facet_labeller) +
+  facet_grid(Parameter ~ Cens + Baseline, labeller = facet_labeller) +
+  # Zoom around the practical coverage range while preserving all computed
+  # intervals. `coord_cartesian()` does not drop data outside the view, unlike
+  # scale limits.
+  coord_cartesian(ylim = c(0.85, 1.00)) +
   theme_bw() +
   labs(
     x = "Scenario",
@@ -2260,7 +2315,7 @@ p_cov <- ggplot(cov_sum, aes(x = Scenario, y = coverage, group = k)) +
 # ------------------------------------------------------------
 # SAVE as PNGs
 # ------------------------------------------------------------
-out_dir <- here("Bunya/ENZAMET/figures/performance")
+out_dir <- file.path(fig_dir, "performance")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 ggsave(file.path(out_dir, paste0("bias_distributions_", analysis_dist_file, "_scen1_5.png")),     p_bias,   width = 14, height = 8, dpi = 300)
