@@ -98,6 +98,25 @@ compute_waic_from_log_lik <- function(fit, log_lik_var = "log_lik") {
   loo::waic(log_lik_draws)
 }
 
+alpha_prior_calibration <- function() {
+  # Calibrate the association prior through a clinically interpretable
+  # multiplicative survival-time change over Delta_y marker units. Defaults
+  # preserve the main manuscript run; sensitivity SLURMs override max_f.
+  delta_y <- as.numeric(Sys.getenv("SIM_ALPHA_DELTA_Y", unset = "1.96"))
+  max_f <- as.numeric(Sys.getenv("SIM_ALPHA_MAX_F", unset = "2"))
+  if (!is.finite(delta_y) || delta_y <= 0) {
+    stop("SIM_ALPHA_DELTA_Y must be a positive finite number.")
+  }
+  if (!is.finite(max_f) || max_f < 1) {
+    stop("SIM_ALPHA_MAX_F must be finite and >= 1.")
+  }
+  list(
+    delta_y = delta_y,
+    max_f = max_f,
+    sigma_alpha = log(max_f) / delta_y
+  )
+}
+
 # Set CmdStan path globally for main session
 set_cmdstan_path("~/.cmdstan/cmdstan-2.37.0")
 
@@ -406,12 +425,10 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   s_long <- summary(fit_long)$sigma
   s_surv <- summary(fit_surv)$scale
   
-  # Calibrate alpha_tilde prior scale using clinically interpretable parameterization
-  # Delta_y: MCID expressed in SD units of Y_long (e.g., 1.96 ~ 2 SD)
-  # max_f: Maximum plausible multiplicative change in survival time (e.g., 2x)
-  Delta_y <- 1.96
-  max_f <- 2
-  sigma_alpha <- log(max_f) / Delta_y
+  # Calibrate alpha_tilde prior scale using clinically interpretable
+  # parameterization. Sensitivity runs set SIM_ALPHA_MAX_F, e.g. 1.25, 1.5, 3.
+  alpha_cal <- alpha_prior_calibration()
+  sigma_alpha <- alpha_cal$sigma_alpha
   alpha_tilde_sd <- sigma_alpha * (s_long / s_surv)
   
   list(
@@ -1150,6 +1167,9 @@ run_simulation <- function(i, n_patients, lambda_c, aft_mode, max_FU, config_has
   # them here does not change the likelihood or posterior target.
   prior_info <- list(
     longitudinal_response_center = longitudinal_response_center,
+    alpha_prior_delta_y = alpha_prior_calibration()$delta_y,
+    alpha_prior_max_f = alpha_prior_calibration()$max_f,
+    alpha_prior_sd_target = alpha_prior_calibration()$sigma_alpha,
     s_long = s_long_saved,
     s_surv = s_surv_saved,
     alpha_tilde_prior_mean = 0,
@@ -1321,6 +1341,31 @@ config_grid <- config_grid[order(
   match(config_grid$cens_label, c("50", "admin"))
 ), ]
 row.names(config_grid) <- NULL
+config_grid$full_config_id <- seq_len(nrow(config_grid))
+
+# Optional comma-separated baseline filter for targeted sensitivity runs.
+# Example: SIM_BASELINE_FILTER=LL120_230 keeps only the original log-logistic
+# settings while leaving the default full 40-config run unchanged.
+baseline_filter <- Sys.getenv("SIM_BASELINE_FILTER", unset = "")
+if (nzchar(baseline_filter)) {
+  keep_baselines <- trimws(strsplit(baseline_filter, ",", fixed = TRUE)[[1]])
+  keep_baselines <- keep_baselines[nzchar(keep_baselines)]
+  if (length(keep_baselines) == 0) stop("SIM_BASELINE_FILTER did not contain any valid labels.")
+  config_grid <- config_grid[config_grid$baseline_label %in% keep_baselines, , drop = FALSE]
+  if (nrow(config_grid) == 0) {
+    stop(sprintf(
+      "SIM_BASELINE_FILTER matched no configs. Requested: %s; available: %s",
+      paste(keep_baselines, collapse = ", "),
+      paste(unique(baseline_grid$baseline_label), collapse = ", ")
+    ))
+  }
+  row.names(config_grid) <- NULL
+  message(sprintf(
+    "Applied SIM_BASELINE_FILTER=%s; retained %d configs.",
+    paste(keep_baselines, collapse = ","),
+    nrow(config_grid)
+  ))
+}
 
 # Full-run defaults: 1000 replicates per config, split into 250 batches of 4.
 # Slurm launchers can override these for small test runs.
@@ -1370,7 +1415,7 @@ trial_ids <- ((batch_id - 1) * batch_size + 1):(batch_id * batch_size)
 # config_hash <- as.integer(as.numeric(as.factor(
 #   paste(n_patients, lambda_c, aft_mode, k_bases, scenario, max_FU, sep = "_")
 # )))
-config_hash <- config_id # use config_id as hash since it's already a unique integer identifier for the config
+config_hash <- config$full_config_id # preserve full-grid seed hashes under config filtering
 # print config and config_hash for debugging
 message(sprintf("Config ID: %d, Config Hash: %d, n_patients:
 %d, lambda_c: %.5f, baseline: %s, aft_mode: %s, k_bases: %d, scenario: %d, max_FU: %d",
