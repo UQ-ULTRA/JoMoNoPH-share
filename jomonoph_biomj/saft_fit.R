@@ -1,18 +1,23 @@
 
 # Load packages
 library(cmdstanr) # for use of Stan
-library(survreg) # for AFT model
 library(lme4) # for LMM
+library(nlme) # for LMM
+library(here) # for file directories
+
+### REMOVE THIS ONCE MOVED INTO https://github.com/UQ-ULTRA/JoMoNoPH_BiomJ 
+setwd(here("jomonoph_biomj"))
+### 
 
 # Load data
-data <- read.csv("joint_model_data.csv")
-
+longitudinal_data <- read.csv("simulated_longitudinal_data.csv")
+survival_data <- read.csv("simulated_survival_data.csv")
 
 # Load Stan model
-model <- cmdstan_model("saft_jm.stan")
+saftjm_model <- cmdstan_model("saft_jm.stan")
 
 # Fit with LMM (linear mixed model)
-
+lmm_fit <- lme(fixed = Y_obs ~ time+time:arm, random = ~ time|id, data = longitudinal_data)
 
 # Fit with AFT (survival only component)
 

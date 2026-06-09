@@ -44,7 +44,7 @@ functions {
     
     real eps = 1e-6; // small constant
     real tau_aft = max(kappa) + eps; // maximum kappa
-    vector[n] kappa_scaled = fmin(fmax(kappa ./ kappa_scaled, eps), 1 - eps);
+    vector[n] kappa_scaled = fmin(fmax(kappa ./ tau_aft, eps), 1 - eps);
     vector[n] omy = 1 - kappa_scaled;
     
     // initialise baseline and cumulative baseline hazards as zero vectors
