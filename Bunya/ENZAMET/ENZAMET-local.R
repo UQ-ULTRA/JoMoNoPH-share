@@ -48,13 +48,11 @@ source(here("Bunya", "Auxiliary", "BP-functions.R"))
 scenario <- 1 # ENZAMET data-gen scenario (1, 2, 4, ...)
 n_patients <- 1100 # smaller than ENZAMET full (1100) for local speed
 max_FU <- 120
-lambda_c <- 0.009948730 # scenario-2 censoring rate; set 0 for no censoring
+lambda_c <- 0.009948730 # scenario-1 censoring rate; set 0 for no censoring
 k_bases <- 5  # Bernstein basis dimension
 chains <- 4
 iter_warmup <- 1000
 iter_sampling <- 1000
-# Might want to make max_treedepth 12 instead of 10
-
 
 # config_hash
 config_hash <- 1
@@ -80,11 +78,11 @@ seed <- unique_seed
 
 convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5) {
   mf_long_raw <- nlme::getData(fit_long)
-  mf_long     <- model.frame(formula(fit_long), data = mf_long_raw, na.action = na.omit)
-  idx_long    <- as.numeric(rownames(mf_long))
-  mf_long$id   <- mf_long_raw$id[idx_long]
+  mf_long <- model.frame(formula(fit_long), data = mf_long_raw, na.action = na.omit)
+  idx_long <- as.numeric(rownames(mf_long))
+  mf_long$id <- mf_long_raw$id[idx_long]
   mf_long$time <- mf_long_raw$time[idx_long]
-  mf_long$arm  <- mf_long_raw$arm[idx_long]
+  mf_long$arm <- mf_long_raw$arm[idx_long]
   
   X_long   <- model.matrix(~ time + time_by_arm, data = mf_long)
   Y_long   <- as.numeric(model.response(mf_long))
@@ -92,26 +90,26 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
   J_1_long <- as.integer(id_long)
   N_1_long <- length(unique(J_1_long))
   
-  mf_surv        <- model.frame(fit_surv)
-  idx_surv       <- as.numeric(rownames(mf_surv))
-  mf_surv$id     <- surv_data$id[idx_surv]
-  mf_surv$arm    <- surv_data$arm[idx_surv]
-  y_surv         <- model.response(mf_surv)
-  mf_surv$time   <- y_surv[, "time"]
+  mf_surv <- model.frame(fit_surv)
+  idx_surv <- as.numeric(rownames(mf_surv))
+  mf_surv$id <- surv_data$id[idx_surv]
+  mf_surv$arm <- surv_data$arm[idx_surv]
+  y_surv <- model.response(mf_surv)
+  mf_surv$time <- y_surv[, "time"]
   mf_surv$status <- y_surv[, "status"]
-  mf_surv$arm    <- as.numeric(mf_surv$arm)
-  X_surv         <- model.matrix(~ 0 + arm, data = mf_surv)
-  J_1_unique     <- match(unique(mf_surv$id), levels(id_long))
+  mf_surv$arm <- as.numeric(mf_surv$arm)
+  X_surv <- model.matrix(~ 0 + arm, data = mf_surv)
+  J_1_unique <- match(unique(mf_surv$id), levels(id_long))
   
   mf_surv$time_by_arm <- mf_surv$time * mf_surv$arm
   X_long_surv <- model.matrix(~ time + time_by_arm, data = mf_surv)
   
   beta_long_mean <- nlme::fixef(fit_long)
   beta_surv_mean <- coef(fit_surv)[-1]
-  vc_long        <- VarCorr(fit_long)
-  sd_b           <- sqrt(as.numeric(vc_long[c("(Intercept)", "time"), "Variance"]))
-  s_long         <- summary(fit_long)$sigma
-  s_surv         <- summary(fit_surv)$scale
+  vc_long <- VarCorr(fit_long)
+  sd_b <- sqrt(as.numeric(vc_long[c("(Intercept)", "time"), "Variance"]))
+  s_long <- summary(fit_long)$sigma
+  s_surv <- summary(fit_surv)$scale
   alpha_tilde_sd <- (log(2) / 1.96) * (s_long / s_surv)
   
   list(
@@ -136,8 +134,7 @@ convert_data_from_models <- function(fit_long, fit_surv, surv_data, k_bases = 5)
     s_long = s_long, s_surv = s_surv,
     alpha_tilde_sd = alpha_tilde_sd,
     location_beta_real = 0, scale_beta_real = 1,
-    std_real = 1, means_real = 0,
-    r = 2, tau_h = 0.01
+    std_real = 1, means_real = 0
   )
 }
 
@@ -150,25 +147,25 @@ make_init <- function(sim_dat, stan_data, chains) {
     data = sim_dat$longitudinal,
     control = nlme::lmeControl(maxIter = 100, msMaxIter = 100, opt = "optim")
   )
-  aft  <- survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival)
+  aft <- survival::survreg(Surv(time, status) ~ arm, data = sim_dat$survival)
   b_fe <- as.numeric(nlme::fixef(lmm))
-  sig  <- summary(lmm)$sigma
-  vc   <- nlme::VarCorr(lmm)
-  sds  <- sqrt(as.numeric(vc[1:2, "Variance"]))
+  sig <- summary(lmm)$sigma
+  vc <- nlme::VarCorr(lmm)
+  sds <- sqrt(as.numeric(vc[1:2, "Variance"]))
   b_sv <- rep(coef(aft)[2], stan_data$q)
-  rho  <- 0.2
-  L    <- t(chol(matrix(c(1, rho, rho, 1), 2, 2)))
+  rho <- 0.2
+  L <- t(chol(matrix(c(1, rho, rho, 1), 2, 2)))
   
   lapply(seq_len(chains), function(.) {
     list(
-      z_1_long    = matrix(rnorm(2 * stan_data$N_1_long), nrow = 2),
-      L_1_long    = L,
-      beta_long   = b_fe + rnorm(stan_data$K_long, 0, 0.1),
-      sigma_long  = abs(rnorm(1, sig, 1)),
-      sd_1_long   = pmax(sds + abs(rnorm(2, 0, 0.05)), 1e-3),
-      beta_surv   = rnorm(stan_data$q, b_sv, 0.05),
+      z_1_long = matrix(rnorm(2 * stan_data$N_1_long), nrow = 2),
+      L_1_long = L,
+      beta_long = b_fe + rnorm(stan_data$K_long, 0, 0.1),
+      sigma_long = abs(rnorm(1, sig, 1)),
+      sd_1_long = pmax(sds + abs(rnorm(2, 0, 0.05)), 1e-3),
+      beta_surv = rnorm(stan_data$q, b_sv, 0.05),
       alpha_tilde = rnorm(1, 0, 0.1),
-      gamma       = abs(rnorm(stan_data$m, 0.1, 0.01))
+      gamma = abs(rnorm(stan_data$m, 0.1, 0.01))
     )
   })
 }
@@ -216,6 +213,12 @@ sim_dat <- simulate_joint_dataset(
   n_patients = n_patients, max_FU = max_FU, lambda_c = lambda_c,
   aft_mode = "loglogistic", link_type = "value"
 )
+
+# Save this data to a CSV file
+write.csv(sim_dat$longitudinal, file = here("Bunya", "ENZAMET", sprintf("simulated_longitudinal_data.csv")), row.names = FALSE)
+write.csv(sim_dat$survival, file = here("Bunya", "ENZAMET", sprintf("simulated_survival_data.csv")), row.names = FALSE)
+
+
 
 # Center longitudinal outcome and keep the sample mean for back-transformation later.
 Y_obs_sample_mean <- mean(sim_dat$longitudinal$Y_obs, na.rm = TRUE)
