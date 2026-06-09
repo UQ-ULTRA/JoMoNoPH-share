@@ -1,1 +1,1 @@
-define the senarios for HPC workflow
+define the scenarios for HPC workflow
