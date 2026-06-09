@@ -4,32 +4,31 @@ functions {
 
   // aft joint survival log likelihood function
   vector loglik_aft_jm(
-    vector time,
-    vector beta_surv,
-    vector beta_long,
-    matrix b_long,
-    vector gamma,
-    vector status,
-    matrix X_surv,
-    real alpha,
-    vector Y_long_surv,
-    vector bp_pdf_coef,
-    vector bp_pdf_to_cdf_coef,
-    int m
+    vector time, // survival times
+    vector beta_surv, // survival model population-level effects
+    vector beta_long, // longitudinal model population-level effects
+    matrix b_long, // longitudinal model group-level effects
+    vector gamma, // baseline hazard coefficients
+    vector status, // event indicators
+    matrix X_surv, // survival model design matrix 
+    real alpha, // association parameter
+    vector Y_long_surv, // longitudinal model fitted values at survival times
+    vector bp_pdf_coef, // bernstein basis coefficients for the pdf (binomial coefficients)
+    vector bp_pdf_to_cdf_coef, // coefficients to convert from pdf to cdf basis (m / k)
+    int m // degree of the bernstein polynomial for the baseline hazard
   )
  {
-    int n = num_elements(status);
-    vector[n] log_lik;
-    vector[n] h0;
-    vector[n] H0;
-    vector[n] y;
-    vector[n] linpred_surv;
+    int n = num_elements(status); // number of individuals (length of survival dataset)
+    vector[n] log_lik; // log-likelihood
+    vector[n] h0; // baseline hazard
+    vector[n] H0; // cumulative baseline hazard
+    vector[n] kappa; // accelerated time
+    vector[n] linpred_surv; // survival linear predictor
     
     
     // assuming current value linkage between the longitudinal model and the AFT model
     // given the mean effect (without the random error):
     // Y*(t) = beta0 + beta1 * t + beta2 * t * arm + b0 + b1 * t
-    // Equivalence within data generation is seen at around line 155 in Data_gen-I2a-nobD1.R
     vector[n] eta_surv = X_surv * beta_surv;
     vector[n] C1 = eta_surv + alpha * (beta_long[1] + b_long[,1]);
     vector[n] C2 = alpha * (beta_long[2] + X_surv[,1] * beta_long[3] + b_long[,2]);
@@ -37,57 +36,37 @@ functions {
     
     for (i in 1:n){
       if (C2[i] != 0) {
-        // Algebraically equivalent to the original expression below, but more
-        // stable when C2[i] * time[i] is close to zero.
-        y[i] = exp(-C1[i]) * (-expm1(-C2[i] * time[i])) / C2[i];
-        // Original version:
-        // y[i] = exp(-C1[i]) * (1 - exp(-C2[i] * time[i])) / C2[i];
+        kappa[i] = exp(-C1[i]) * (-expm1(-C2[i] * time[i])) / C2[i];
       } else {
-        y[i] = exp(-C1[i]) * time[i];
+        kappa[i] = exp(-C1[i]) * time[i];
       }
     }
     
-    real eps = 1e-6;
-    real tau_aft = max(y) + eps;
-    vector[n] y_alt = fmin(fmax(y ./ tau_aft, eps), 1 - eps);
-    vector[n] omy = 1 - y_alt;
+    real eps = 1e-6; // small constant
+    real tau_aft = max(kappa) + eps; // maximum kappa
+    vector[n] kappa_scaled = fmin(fmax(kappa ./ kappa_scaled, eps), 1 - eps);
+    vector[n] omy = 1 - kappa_scaled;
     
-    h0 = rep_vector(0.0, n);
+    // initialise baseline and cumulative baseline hazards as zero vectors
+    h0 = rep_vector(0.0, n); 
     H0 = rep_vector(0.0, n);
 
-    // Direct hazard and cumulative hazard sums. Let y = y_alt and
-    // B_{a,d}(y) = choose(d, a) * y^a * (1 - y)^(d - a).
-    //
-    // Baseline hazard:
-    //   h0(y) = (m / tau_aft) *
-    //           sum_{k=1}^m gamma[k] * B_{k-1,m-1}(y)
-    // where this is equivalent to:
-    //   sum_k gamma[k] * beta_pdf(y | k, m-k+1) / tau_aft.
-    //
-    // Cumulative baseline hazard:
-    //   H0(y) = sum_{j=1}^m gamma_cum[j] * B_{j,m}(y),
-    //   gamma_cum[j] = sum_{k=1}^j gamma[k].
-    //
-    // Instead of running a second loop over the degree-m basis for H0, use
-    //   B_{k,m}(y) = (m / k) * y * B_{k-1,m-1}(y).
-    // The j = 0 Bernstein term is not included because its integrated-basis
-    // coefficient is zero.
-    {
-      vector[m] gamma_cum = cumulative_sum(gamma);
-      vector[n] y_pw = rep_vector(1.0, n);
-      vector[n] omy_pw = pow(omy, m - 1);
-      for (k in 1:m) {
-        vector[n] bern_pdf = bp_pdf_coef[k] * y_pw .* omy_pw;
-        h0 += gamma[k] * bern_pdf;
-        H0 += gamma_cum[k] * bp_pdf_to_cdf_coef[k] * (y_alt .* bern_pdf);
-        if (k < m) {
-          y_pw .*= y_alt;
-          omy_pw ./= omy;
-        }
+    vector[m] gamma_cum = cumulative_sum(gamma);
+    vector[n] y_pw = rep_vector(1.0, n);
+    vector[n] omy_pw = pow(omy, m - 1);
+    
+    
+    for (k in 1:m) {
+      vector[n] bern_pdf = bp_pdf_coef[k] * y_pw .* omy_pw;
+      h0 += gamma[k] * bern_pdf;
+      H0 += gamma_cum[k] * bp_pdf_to_cdf_coef[k] * (kappa_scaled .* bern_pdf);
+      if (k < m) {
+        y_pw .*= kappa_scaled;
+        omy_pw ./= omy;
       }
-      h0 *= m / tau_aft;
     }
-
+    
+    h0 *= m / tau_aft;
     h0 = fmax(h0, 1e-12);
 
     log_lik = ((log(h0) - linpred_surv) .* status) - H0;
@@ -98,14 +77,10 @@ functions {
 // Data
 data {
   
-  //// survival data sizes (must come first because they are used for prior dims)
+  //// survival data sizes 
   int<lower=1> K_long; // number of population-level effects
   int<lower=1> q; // number of survival covariates
   int<lower=1> m; // Bernstein polynomial degree
-  
-  //// smoothing parameters
-  int<lower=1> r;  // order of difference (1 = first difference, 2 = second difference, etc.)
-  real<lower=0> tau_h;  // smoothing parameter
 
   // prior locations and scales
   vector[K_long] beta_long_prior_mean;
@@ -140,12 +115,10 @@ data {
   matrix[n, K_long] X_long_surv;
 }
 
-// Transformed Data
+// Transformed data
 transformed data {
   
-  // Bernstein basis constants. These depend only on the basis degree, so
-  // compute once rather than during every HMC evaluation.
-  //
+  // construction of the bernstein basis coefficients, beta/binomal coefficients that are used to normalise cdf/pdf
   // bp_pdf_coef[k] = choose(m - 1, k - 1), used for B_{k-1,m-1}(y).
   // bp_pdf_to_cdf_coef[k] = m / k, because
   // B_{k,m}(y) = (m / k) * y * B_{k-1,m-1}(y).
@@ -178,7 +151,7 @@ parameters {
   
 }
 
-// Transformed Parameters
+// Transformed parameters
 transformed parameters {
 
   //// longitudinal transformed parameters
@@ -226,16 +199,14 @@ model {
   target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
 }
 
-// Generated Quantities
+// Generated quantities
 generated quantities {
   
   // participant-level joint log likelihood generation, used for LOO/WAIC statistics
   vector[n] log_lik;
   vector[n] log_lik_surv = loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m);
   vector[n] log_lik_long = rep_vector(0, n);
-  vector[N_long] mu_long_ic = X_long * beta_long
-                            + b_long[J_1_long, 1] .* Z_1_1_long
-                            + b_long[J_1_long, 2] .* Z_1_2_long;
+  vector[N_long] mu_long_ic = X_long * beta_long + b_long[J_1_long, 1] .* Z_1_1_long + b_long[J_1_long, 2] .* Z_1_2_long;
 
   for (j in 1:N_long) {
     log_lik_long[J_1_long[j]] += normal_lpdf(Y_long[j] | mu_long_ic[j], sigma_long);
