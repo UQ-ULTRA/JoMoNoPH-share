@@ -89,9 +89,9 @@ data {
   vector<lower=0>[q] beta_surv_prior_scale;
   
   // scale parameters for association parameter
-  real s_long;  // scale for longitudinal process
-  real s_surv;  // scale for survival linear predictor
-  real<lower=0> alpha_tilde_sd;  // prior scale for alpha_tilde (clinically calibrated)
+  real s_long; // scale for longitudinal process
+  real s_surv; // scale for survival linear predictor
+  real<lower=0> alpha_tilde_sd; // prior scale for alpha_tilde (clinically calibrated)
 
   //// longitudinal data
   int<lower=1> N_long; // total number of observations
@@ -105,10 +105,10 @@ data {
   vector[N_long] Z_1_2_long; // time 
 
   //// survival data
-  int<lower=1> n;
-  vector<lower=0, upper=1>[n] status;
-  vector<lower=0>[n] time;
-  matrix[n, q] X_surv;
+  int<lower=1> n; // number of individuals (survival observations)
+  vector<lower=0, upper=1>[n] status; // event indicator
+  vector<lower=0>[n] time; // survival times
+  matrix[n, q] X_surv; // survival covariates
 
   //// linking data
   array[n] int<lower=1> J_1_unique;

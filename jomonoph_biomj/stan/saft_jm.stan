@@ -84,14 +84,14 @@ data {
 
   // prior locations and scales
   vector[K_long] beta_long_prior_mean;
-  vector<lower=0>[K_long] beta_long_prior_scale;
+  vector<lower=0>[K_long] beta_long_prior_scale; 
   vector[q] beta_surv_prior_mean;
   vector<lower=0>[q] beta_surv_prior_scale;
   
   // scale parameters for association parameter
-  real s_long;  // scale for longitudinal process
-  real s_surv;  // scale for survival linear predictor
-  real<lower=0> alpha_tilde_sd;  // prior scale for alpha_tilde (clinically calibrated)
+  real s_long; // scale for longitudinal process
+  real s_surv; // scale for survival linear predictor
+  real<lower=0> alpha_sd;  // prior scale for alpha 
 
   //// longitudinal data
   int<lower=1> N_long; // total number of observations
@@ -190,7 +190,7 @@ model {
 
   //// survival priors
   beta_surv ~ normal(beta_surv_prior_mean, beta_surv_prior_scale);
-  alpha_tilde ~ normal(0, alpha_tilde_sd);
+  alpha_tilde ~ normal(0, alpha_sd);
   
   // bernstein polynomial weight
   gamma ~ normal(0, 1) T[0, ];
