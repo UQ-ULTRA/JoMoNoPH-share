@@ -77,7 +77,7 @@ functions {
 // Data
 data {
   
-  //// survival data sizes 
+  //// data sizes 
   int<lower=1> K_long; // number of population-level effects
   int<lower=1> q; // number of survival covariates
   int<lower=1> m; // Bernstein polynomial degree

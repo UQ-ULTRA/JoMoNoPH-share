@@ -14,9 +14,18 @@ setwd(here("jomonoph_biomj"))
 global_seed <- 4159125
 set.seed(global_seed)
 
-# Load data
-longitudinal_data <- read.csv("simulated_longitudinal_data.csv")
-survival_data <- read.csv("simulated_survival_data.csv")
+# Choice to use pre-compiled CSV files or generate data for a specific seed
+simulate_own_data <- TRUE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
+
+## Load data
+if (!simulate_own_data) {
+  longitudinal_data <- read.csv("simulated_longitudinal_data.csv")
+  survival_data <- read.csv("simulated_survival_data.csv")
+}
+
+
+
+
 
 # Load Stan model
 saftjm_model <- cmdstan_model("saft_jm.stan")
@@ -39,8 +48,8 @@ X_long_surv <- cbind(Intercept = 1, time = survival_data$T_obs, time_arm = survi
 
 # Stan data to be inputted to the Stan sAFT model
 stan_data <- list(
-  K_long = ncol(X_long), # number of fixed effects in the longitudinal submodel
-  q = ncol(X_surv), # number of fixed effects in the survival submodel
+  K_long = ncol(X_long), # number of survival population level effects
+  q = ncol(X_surv), # number of survival covariates
   m = 5, # number of random effects in the longitudinal submodel (intercept and slope)
   s_long = sd(longitudinal_data$Y_obs),
   s_surv = 1,
@@ -69,4 +78,20 @@ sAFT_fit <- saftjm_model$sample(
   iter_warmup = 1000,
   iter_sampling = 1000
 )
+
+
+# Comparison of results
+result_comparison <- data.frame(
+  Parameter = c("beta_long_time", "beta_long_time_arm", "beta_surv_arm", "alpha_tilde"),
+  LMM = c(fixef(lmm_fit)["time"], fixef(lmm_fit)["time:arm"], NA, NA),
+  AFT = c(NA, NA, surv_fit$coefficients["arm"], NA),
+  sAFT = c(sAFT_fit$summary(c("beta_long[2]", "beta_long[3]"))$mean, sAFT_fit$summary("beta_surv[1]")$mean, sAFT_fit$summary("alpha_tilde")$mean)
+)
+result_comparison
+
+
+print(summary(lmm_fit)$tTable)
+print(summary(surv_fit))
+print(sAFT_fit$summary(c("beta_long", "beta_surv", "alpha_tilde")))
+
 
