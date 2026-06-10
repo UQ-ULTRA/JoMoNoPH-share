@@ -5,13 +5,14 @@ library(lme4) # for LMM
 library(nlme) # for LMM
 library(survival) # for survival analysis
 library(here) # for file directories
+library(tidyverse) # for data manipulation and plotting
 
 ### REMOVE THIS ONCE MOVED INTO https://github.com/UQ-ULTRA/JoMoNoPH_BiomJ 
 setwd(here("jomonoph_biomj"))
 ### 
 
 # Set seed for reproducibility
-global_seed <- 4159125
+global_seed <- 4159125 # Change to whichever seed one wants simulation for
 set.seed(global_seed)
 
 # Choice to use pre-compiled CSV files or generate data for a specific seed
@@ -23,9 +24,10 @@ if (!simulate_own_data) {
   survival_data <- read.csv("simulated_survival_data.csv")
 } else {
   # Simulate data given a specific seed (global_seed)
-  source("datagen.R")
-  
-  
+  source("datagen.R") # Source file for data generation
+  sim_data <- simulate_joint_dataset(seed = global_seed) # Default settings use 'scenario 1'
+  longitudinal_data <- sim_data$longitudinal
+  survival_data <- sim_data$survival
 }
 
 
@@ -94,6 +96,12 @@ result_comparison <- data.frame(
 result_comparison
 
 
+# Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
+plot_data <- data.frame()
+plot_comparison <- 
+  
+  
+  
 print(summary(lmm_fit)$tTable)
 print(summary(surv_fit))
 print(sAFT_fit$summary(c("beta_long", "beta_surv", "alpha_tilde")))

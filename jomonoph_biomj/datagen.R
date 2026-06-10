@@ -1,22 +1,25 @@
 
 # Load packages
-library(tidyverse) # for data manipulation and visualization
-library(cmdstanr) # for Bayesian modeling
+library(MASS) # for mvrnorm
 
 # Inverse CDF functions for survival time generation
 ll_inv <- function(u, shape, scale) scale*((u / (1 - u))^(1 / shape))
 wb_inv <- function(u, shape, scale) scale*(-log(1 - u))^(1 / shape)
 
 # Primary simulation function
-simulate_joint_dataset <- function(D, beta_0, beta_1, beta_2, sigma_e,
-                                   log_AF, alpha_AFT,
-                                   loglogistic_shape, loglogistic_scale,
-                                   visit, seed, n_patients, max_FU, lambda_c = -1,
+simulate_joint_dataset <- function(D = matrix(c(15^2, -0.10*15*0.20, -0.10*15*0.20, 0.20^2), 2, 2), 
+                                   beta_0 = 73, beta_1 = -0.04, beta_2 = 0.00, sigma_e = 12,
+                                   log_AF = 0.00, alpha_AFT = 0.012,
+                                   loglogistic_shape = 1.20, loglogistic_scale = 23,
+                                   visit = c(0, 1, seq(3, 92, 3)), 
+                                   seed, n_patients = 1100, max_FU = 120, lambda_c = -1,
                                    aft_mode = "loglogistic", link_type = "value",
                                    ...) {  # absorb unused PH/Weibull placeholders
   
-  if (!is.null(seed)) set.seed(seed)
+  # Set seed
+  set.seed(seed)
   
+  # Initialise parameters
   n <- n_patients
   arm <- rep(0:1, each = n / 2)
   b <- mvrnorm(n, mu = c(0, 0), Sigma = D)
