@@ -81,12 +81,6 @@ data {
   int<lower=1> K_long; // number of population-level effects
   int<lower=1> q; // number of survival covariates
   int<lower=1> m; // Bernstein polynomial degree
-
-  // prior locations and scales
-  vector[K_long] beta_long_prior_mean;
-  vector<lower=0>[K_long] beta_long_prior_scale;
-  vector[q] beta_surv_prior_mean;
-  vector<lower=0>[q] beta_surv_prior_scale;
   
   // scale parameters for association parameter
   real s_long; // scale for longitudinal process
@@ -176,7 +170,7 @@ transformed parameters {
 model {
   
   //// longitudinal priors
-  beta_long ~ normal(beta_long_prior_mean, beta_long_prior_scale);
+  beta_long ~ normal(0, 10);
   sigma_long ~ cauchy(0, 5);
   sd_1_long ~ cauchy(0, 5);
   L_1_long ~ lkj_corr_cholesky(2);
@@ -189,11 +183,11 @@ model {
   Y_long ~ normal(mu_long, sigma_long);
 
   //// survival priors
-  beta_surv ~ normal(beta_surv_prior_mean, beta_surv_prior_scale);
+  beta_surv ~ normal(0, 10);
   alpha_tilde ~ normal(0, alpha_tilde_sd);
   
   // bernstein polynomial weight
-  gamma ~ normal(0, 1) T[0, ];
+  gamma ~ normal(0, 1) T[0, ]; 
 
   // survival likelihood
   target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
