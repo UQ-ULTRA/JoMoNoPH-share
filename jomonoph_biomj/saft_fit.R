@@ -21,10 +21,12 @@ simulate_own_data <- TRUE # FALSE = use the pre-complied CSV files, TRUE = simul
 if (!simulate_own_data) {
   longitudinal_data <- read.csv("simulated_longitudinal_data.csv")
   survival_data <- read.csv("simulated_survival_data.csv")
+} else {
+  # Simulate data given a specific seed (global_seed)
+  source("datagen.R")
+  
+  
 }
-
-
-
 
 
 # Load Stan model
@@ -37,10 +39,12 @@ surv_fit <- survreg(Surv(T_obs, status) ~ arm, data = survival_data, dist = "wei
 
 ### Construct data necessary for Stan
 
+# ID levels for each participant, used for matching longitudinal and time-to-event observations
 id_levels <- sort(unique(longitudinal_data$id))
 J_1_long <- match(longitudinal_data$id, id_levels)
 J_1_unique <- match(survival_data$id, id_levels)
 
+# Covariate lists for longitudinal, survival and longitudinal-survival (used for inserting current value into time-to-event model) submodels
 X_long <- cbind(Intercept = 1, time = longitudinal_data$time, time_arm = longitudinal_data$time*longitudinal_data$arm)
 X_surv <- matrix(survival_data$arm, ncol = 1)
 X_long_surv <- cbind(Intercept = 1, time = survival_data$T_obs, time_arm = survival_data$T_obs*survival_data$arm)
@@ -48,11 +52,11 @@ X_long_surv <- cbind(Intercept = 1, time = survival_data$T_obs, time_arm = survi
 
 # Stan data to be inputted to the Stan sAFT model
 stan_data <- list(
-  K_long = ncol(X_long), # number of survival population level effects
+  K_long = ncol(X_long), # number of longitudinal population level covariates
   q = ncol(X_surv), # number of survival covariates
-  m = 5, # number of random effects in the longitudinal submodel (intercept and slope)
-  s_long = sd(longitudinal_data$Y_obs),
-  s_surv = 1,
+  m = 5, # degree of bernstein polynomial
+  s_long = sd(longitudinal_data$Y_obs), # sample standard deviation of longitudinal outcome
+  s_surv = sd(survival_data$T_obs), # sample standard deviation of survival scale
   alpha_tilde_sd = 1,
   N_long = nrow(longitudinal_data),
   Y_long = longitudinal_data$Y_obs,

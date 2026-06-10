@@ -36,7 +36,7 @@ simulate_joint_dataset <- function(D, beta_0, beta_1, beta_2, sigma_e,
   }
   
   # Inverse-sample base survival times
-  U     <- runif(n, 1e-6, 1 - 1e-6)
+  U <- runif(n, 1e-6, 1 - 1e-6)
   kappa <- if (aft_mode == "loglogistic") {
     ll_inv(U, loglogistic_shape, loglogistic_scale)
   } else {
@@ -83,4 +83,8 @@ simulate_joint_dataset <- function(D, beta_0, beta_1, beta_2, sigma_e,
   
   list(longitudinal = long_data, survival = surv_data)
 }
+
+
+
+
 
