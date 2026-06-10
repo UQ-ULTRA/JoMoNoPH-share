@@ -12,14 +12,15 @@ setwd(here("jomonoph_biomj"))
 ### 
 
 # Set seed for reproducibility
-global_seed <- 4159125 # Change to whichever seed one wants simulation for
+global_seed <- 4159125 # Change to whichever seed one wants simulation for (4159125)
 set.seed(global_seed)
 
 # Choice to use pre-compiled CSV files or generate data for a specific seed
-simulate_own_data <- TRUE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
+simulate_own_data <- FALSE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
 
 ## Load data
 if (!simulate_own_data) {
+  # Use pre-generated CSV files. These correspond to data generation for scenario 1 under global_seed=1
   longitudinal_data <- read.csv("simulated_longitudinal_data.csv")
   survival_data <- read.csv("simulated_survival_data.csv")
 } else {
@@ -30,12 +31,14 @@ if (!simulate_own_data) {
   survival_data <- sim_data$survival
 }
 
+Y_obs_mean <- mean(longitudinal_data$Y_obs)
+longitudinal_data$Y_obs_centred <- longitudinal_data$Y_obs - Y_obs_mean
 
 # Load Stan model
 saftjm_model <- cmdstan_model("saft_jm.stan")
 
 # Fit longitudinal and survival submodels separately
-lmm_fit <- lme(fixed = Y_obs ~ time+time:arm, random = ~ time|id, data = longitudinal_data) # Fit with LMM (linear mixed model)
+lmm_fit <- lme(fixed = Y_obs_centred ~ time+time:arm, random = ~ time|id, data = longitudinal_data) # Fit with LMM (linear mixed model)
 surv_fit <- survreg(Surv(T_obs, status) ~ arm, data = survival_data, dist = "weibull") # Fit with AFT (survival only component)
 
 
@@ -51,17 +54,20 @@ X_long <- cbind(Intercept = 1, time = longitudinal_data$time, time_arm = longitu
 X_surv <- matrix(survival_data$arm, ncol = 1)
 X_long_surv <- cbind(Intercept = 1, time = survival_data$T_obs, time_arm = survival_data$T_obs*survival_data$arm)
 
+# Scale for longitudinal and survival outcomes
+s_long <- sd(longitudinal_data$Y_obs)
+s_surv <- sd(survival_data$T_obs)
 
 # Stan data to be inputted to the Stan sAFT model
 stan_data <- list(
   K_long = ncol(X_long), # number of longitudinal population level covariates
   q = ncol(X_surv), # number of survival covariates
   m = 5, # degree of bernstein polynomial
-  s_long = sd(longitudinal_data$Y_obs), # sample standard deviation of longitudinal outcome
-  s_surv = sd(survival_data$T_obs), # sample standard deviation of survival scale
-  alpha_tilde_sd = 1,
+  s_long = s_long, # sample standard deviation of longitudinal outcome
+  s_surv = s_surv, # sample standard deviation of survival scale
+  alpha_sd = (log(2) / 1.96) * (s_long / s_surv),
   N_long = nrow(longitudinal_data),
-  Y_long = longitudinal_data$Y_obs,
+  Y_long = longitudinal_data$Y_obs_centred,
   X_long = X_long,
   N_1_long = length(id_levels),
   J_1_long = J_1_long,
@@ -95,6 +101,21 @@ result_comparison <- data.frame(
 )
 result_comparison
 
+# original_scale_lmm_t_table <- summary(lmm_fit)$tTable
+# original_scale_lmm_t_table["(Intercept)", "Value"] <- original_scale_lmm_t_table["(Intercept)", "Value"] + Y_obs_mean
+# original_scale_lmm_t_table["(Intercept)", "t-value"] <-
+#   original_scale_lmm_t_table["(Intercept)", "Value"] / original_scale_lmm_t_table["(Intercept)", "Std.Error"]
+# original_scale_lmm_t_table["(Intercept)", "p-value"] <-
+#   2 * pt(abs(original_scale_lmm_t_table["(Intercept)", "t-value"]),
+#          df = original_scale_lmm_t_table["(Intercept)", "DF"],
+#          lower.tail = FALSE)
+# 
+# original_scale_sAFT_summary <- sAFT_fit$summary(c("beta_long", "beta_surv", "alpha_tilde"))
+# beta_long_intercept_row <- original_scale_sAFT_summary$variable == "beta_long[1]"
+# beta_long_location_cols <- intersect(c("mean", "median", "q5", "q95"), names(original_scale_sAFT_summary))
+# original_scale_sAFT_summary[beta_long_intercept_row, beta_long_location_cols] <-
+#   original_scale_sAFT_summary[beta_long_intercept_row, beta_long_location_cols] + Y_obs_mean
+
 
 # Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
 plot_data <- data.frame()
@@ -102,8 +123,8 @@ plot_comparison <-
   
   
   
-print(summary(lmm_fit)$tTable)
+print(original_scale_lmm_t_table)
 print(summary(surv_fit))
-print(sAFT_fit$summary(c("beta_long", "beta_surv", "alpha_tilde")))
+print(original_scale_sAFT_summary)
 
 

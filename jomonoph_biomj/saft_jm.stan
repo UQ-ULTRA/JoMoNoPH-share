@@ -85,7 +85,7 @@ data {
   // scale parameters for association parameter
   real s_long; // scale for longitudinal process
   real s_surv; // scale for survival linear predictor
-  real<lower=0> alpha_tilde_sd; // prior scale for alpha_tilde (clinically calibrated)
+  real<lower=0> alpha_sd; // prior scale for alpha
 
   //// longitudinal data
   int<lower=1> N_long; // total number of observations
@@ -184,7 +184,7 @@ model {
 
   //// survival priors
   beta_surv ~ normal(0, 10);
-  alpha_tilde ~ normal(0, alpha_tilde_sd);
+  alpha_tilde ~ normal(0, alpha_sd);
   
   // bernstein polynomial weight
   gamma ~ normal(0, 1) T[0, ]; 
