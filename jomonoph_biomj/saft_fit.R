@@ -31,6 +31,7 @@ if (!simulate_own_data) {
   survival_data <- sim_data$survival
 }
 
+# Centre the longitudinal outcome
 Y_obs_mean <- mean(longitudinal_data$Y_obs)
 longitudinal_data$Y_obs_centred <- longitudinal_data$Y_obs - Y_obs_mean
 
@@ -101,25 +102,9 @@ result_comparison <- data.frame(
 )
 result_comparison
 
-# original_scale_lmm_t_table <- summary(lmm_fit)$tTable
-# original_scale_lmm_t_table["(Intercept)", "Value"] <- original_scale_lmm_t_table["(Intercept)", "Value"] + Y_obs_mean
-# original_scale_lmm_t_table["(Intercept)", "t-value"] <-
-#   original_scale_lmm_t_table["(Intercept)", "Value"] / original_scale_lmm_t_table["(Intercept)", "Std.Error"]
-# original_scale_lmm_t_table["(Intercept)", "p-value"] <-
-#   2 * pt(abs(original_scale_lmm_t_table["(Intercept)", "t-value"]),
-#          df = original_scale_lmm_t_table["(Intercept)", "DF"],
-#          lower.tail = FALSE)
-# 
-# original_scale_sAFT_summary <- sAFT_fit$summary(c("beta_long", "beta_surv", "alpha_tilde"))
-# beta_long_intercept_row <- original_scale_sAFT_summary$variable == "beta_long[1]"
-# beta_long_location_cols <- intersect(c("mean", "median", "q5", "q95"), names(original_scale_sAFT_summary))
-# original_scale_sAFT_summary[beta_long_intercept_row, beta_long_location_cols] <-
-#   original_scale_sAFT_summary[beta_long_intercept_row, beta_long_location_cols] + Y_obs_mean
-
-
 # Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
 plot_data <- data.frame()
-plot_comparison <- 
+# plot_comparison <- 
   
   
   
