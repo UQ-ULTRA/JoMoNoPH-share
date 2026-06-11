@@ -87,6 +87,37 @@ simulate_joint_dataset <- function(D = matrix(c(15^2, -0.10*15*0.20, -0.10*15*0.
   list(longitudinal = long_data, survival = surv_data)
 }
 
+# Code for initialising Stan parameter values, for stability purposes in MCMC computation
+make_init <- function(chains = 4, lmm_fit, surv_fit) {
+  beta_long_init <- as.numeric(fixef(lmm_fit))
+  sigma_long_init <- summary(lmm_fit)$sigma
+  
+  vc <- nlme::VarCorr(lmm_fit)
+  sd_b_init <- sqrt(as.numeric(vc[c("(Intercept)", "time"), "Variance"]))
+  sd_b_init <- pmax(sd_b_init, 1e-3)
+  
+  beta_surv_init <- as.numeric(coef(surv_fit)["arm"])
+  if (!is.finite(beta_surv_init)) beta_surv_init <- 0
+  
+  lapply(seq_len(chains), function(chain_id) {
+    rho <- -0.1
+    R <- matrix(c(1, rho, rho, 1), 2, 2)
+    L_init <- t(chol(R))
+    
+    list(
+      beta_long = beta_long_init + rnorm(stan_data$K_long, 0, 0.05),
+      sigma_long = abs(rnorm(1, sigma_long_init, 0.25)),
+      sd_1_long = pmax(sd_b_init + rnorm(2, 0, 0.02), 1e-3),
+      z_1_long = matrix(rnorm(2 * stan_data$N_1_long, 0, 0.2), nrow = 2),
+      L_1_long = L_init,
+      beta_surv = rnorm(stan_data$q, beta_surv_init, 0.05),
+      gamma = pmax(rnorm(stan_data$m, 0.1, 0.01), 1e-4),
+      alpha_tilde = rnorm(1, 0, 0.05)
+    )
+  })
+}
+
+
 
 
 

@@ -81,6 +81,8 @@ stan_data <- list(
   X_long_surv = X_long_surv
 )
 
+init_values <- make_init(lmm_fit, surv_fit)
+
 # Fit Stan model
 sAFT_fit <- saftjm_model$sample(
   data = stan_data,
@@ -104,10 +106,6 @@ result_comparison
 
 # Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
 plot_data <- data.frame()
-plot_comparison <- 
+plot_comparison <- 2
   
   
-  
-  print(original_scale_lmm_t_table)
-print(summary(surv_fit))
-print(original_scale_sAFT_summary)

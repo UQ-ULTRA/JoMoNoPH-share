@@ -187,7 +187,7 @@ model {
   alpha_tilde ~ normal(0, alpha_sd);
   
   // bernstein polynomial weight
-  gamma ~ normal(0, 1) T[0, ]; 
+  gamma ~ normal(0, 5) T[0, ]; 
 
   // survival likelihood
   target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
