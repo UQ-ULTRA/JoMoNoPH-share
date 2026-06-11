@@ -7,10 +7,6 @@ library(survival) # for survival analysis
 library(here) # for file directories
 library(tidyverse) # for data manipulation and plotting
 
-### REMOVE THIS ONCE MOVED INTO https://github.com/UQ-ULTRA/JoMoNoPH_BiomJ 
-setwd(here("jomonoph_biomj"))
-### 
-
 source("datagen.R")  # Source file for data generation and MCMC initialisation functions
 
 # Set seed for reproducibility
