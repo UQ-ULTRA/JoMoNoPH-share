@@ -10,13 +10,14 @@ wb_inv <- function(u, shape, scale) scale*(-log(1 - u))^(1 / shape)
 simulate_joint_dataset <- function(D = matrix(c(15^2, -0.10*15*0.20, -0.10*15*0.20, 0.20^2), 2, 2), 
                                    beta_0 = 73, beta_1 = -0.04, beta_2 = 0.00, sigma_e = 12,
                                    log_AF = 0.00, alpha_AFT = 0.012,
+                                   weibull_shape = 0.90, weibull_scale = 38,
                                    loglogistic_shape = 1.20, loglogistic_scale = 23,
                                    visit = c(0, 1, seq(3, 92, 3)), 
                                    seed, n_patients = 1100, max_FU = 120, lambda_c = -1,
                                    aft_mode = "loglogistic", link_type = "value",
                                    ...) {  # absorb unused PH/Weibull placeholders
   
-  # Set seed
+  # Set seed for reproducibility
   set.seed(seed)
   
   # Initialise parameters
@@ -43,12 +44,20 @@ simulate_joint_dataset <- function(D = matrix(c(15^2, -0.10*15*0.20, -0.10*15*0.
   kappa <- if (aft_mode == "loglogistic") {
     ll_inv(U, loglogistic_shape, loglogistic_scale)
   } else {
-    wb_inv(U, loglogistic_shape, loglogistic_scale)  # reuse shape/scale args
+    wb_inv(U, weibull_shape, weibull_scale)  # reuse shape/scale args
   }
   
   # Survival times: T = -log(1 - C2*exp(C1)*kappa) / C2 when C2 != 0
-  A <- pmin(C2 * exp(C1) * kappa, 1 - 1e-8)
-  T_i <- ifelse(abs(C2) < 1e-8, exp(C1) * kappa, -log(1 - A) / C2)
+  if (aft_mode == "weibull") {
+    power_term <- (-log(1 - U))^(1 / weibull_shape)
+    A <- pmin(C2 * weibull_scale * exp(C1) * power_term, 1 - 1e-8)
+    T_i <- ifelse(abs(C2) < 1e-8,
+                  weibull_scale * exp(C1) * power_term,
+                  log(1 - A) / (-C2))
+  } else {
+    A <- pmin(C2 * exp(C1) * kappa, 1 - 1e-8)
+    T_i <- ifelse(abs(C2) < 1e-8, exp(C1) * kappa, -log(1 - A) / C2)
+  }
   
   # Censoring
   if (lambda_c == 0) {

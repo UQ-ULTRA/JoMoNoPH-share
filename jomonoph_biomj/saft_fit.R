@@ -7,9 +7,7 @@ library(survival) # for survival analysis
 library(here) # for file directories
 library(tidyverse) # for data manipulation and plotting
 
-### REMOVE THIS ONCE MOVED INTO https://github.com/UQ-ULTRA/JoMoNoPH_BiomJ 
-setwd(here("jomonoph_biomj"))
-### 
+source("datagen.R")  # Source file for data generation and MCMC initialisation functions
 
 # Set seed for reproducibility
 global_seed <- 4159125 # Change to whichever seed one wants simulation for (4159125)
@@ -25,7 +23,6 @@ if (!simulate_own_data) {
   survival_data <- read.csv("simulated_survival_data.csv")
 } else {
   # Simulate data given a specific seed (global_seed)
-  source("datagen.R") # Source file for data generation
   sim_data <- simulate_joint_dataset(seed = global_seed) # Default settings use 'scenario 1'
   longitudinal_data <- sim_data$longitudinal
   survival_data <- sim_data$survival
@@ -81,7 +78,7 @@ stan_data <- list(
   X_long_surv = X_long_surv
 )
 
-init_values <- make_init(lmm_fit, surv_fit)
+init_values <- make_init(chains=4, lmm_fit, surv_fit)
 
 # Fit Stan model
 sAFT_fit <- saftjm_model$sample(
@@ -89,6 +86,7 @@ sAFT_fit <- saftjm_model$sample(
   chains = 4,
   parallel_chains = 4,
   seed = global_seed,
+  init = init_values,
   iter_warmup = 1000,
   iter_sampling = 1000
 )
@@ -96,10 +94,10 @@ sAFT_fit <- saftjm_model$sample(
 
 # Comparison of results
 result_comparison <- data.frame(
-  Parameter = c("beta_long_time", "beta_long_time_arm", "beta_surv_arm", "alpha_tilde"),
-  LMM = c(fixef(lmm_fit)["time"], fixef(lmm_fit)["time:arm"], NA, NA),
-  AFT = c(NA, NA, surv_fit$coefficients["arm"], NA),
-  sAFT = c(sAFT_fit$summary(c("beta_long[2]", "beta_long[3]"))$mean, sAFT_fit$summary("beta_surv[1]")$mean, sAFT_fit$summary("alpha_tilde")$mean)
+  Parameter = c("beta_long_intercept","beta_long_time", "beta_long_time_arm", "beta_surv_arm", "alpha_tilde"),
+  LMM = c(fixef(lmm_fit)["(Intercept)"], fixef(lmm_fit)["time"], fixef(lmm_fit)["time:arm"], NA, NA),
+  AFT = c(NA, NA, NA, surv_fit$coefficients["arm"], NA),
+  sAFT = c(sAFT_fit$summary(c("beta_long[1],beta_long[2]", "beta_long[3]"))$mean, sAFT_fit$summary("beta_surv[1]")$mean, sAFT_fit$summary("alpha_tilde")$mean)
 )
 result_comparison
 
@@ -107,5 +105,5 @@ result_comparison
 # Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
 plot_data <- data.frame()
 plot_comparison <- 2
-  
-  
+
+

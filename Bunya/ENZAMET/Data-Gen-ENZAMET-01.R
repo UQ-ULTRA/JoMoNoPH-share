@@ -305,7 +305,7 @@ simulate_joint_dataset <- function(D,
         T_i <- log(1 - A) / (-C2)
       }
     }
-        else if (aft_mode == "loglogistic") {
+    else if (aft_mode == "loglogistic") {
       v <- runif(1, min = 1e-6, max = 1)  # avoid v = 0 or 1 for numerical stability
       
       # --- Step 1: Compute C1 ---
