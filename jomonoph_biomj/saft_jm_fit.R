@@ -7,6 +7,10 @@ library(survival) # for survival analysis
 library(here) # for file directories
 library(tidyverse) # for data manipulation and plotting
 
+### REMOVE THIS ONCE MOVED INTO https://github.com/UQ-ULTRA/JoMoNoPH_BiomJ 
+setwd(here("jomonoph_biomj"))
+### 
+
 source("datagen.R")  # Source file for data generation and MCMC initialisation functions
 
 # Set seed for reproducibility
@@ -18,7 +22,7 @@ simulate_own_data <- FALSE # FALSE = use the pre-complied CSV files, TRUE = simu
 
 #### Scenarios used within manuscript
 
-## By default, the simulate_joint_dataset function simulates treatment 'scenario 1' (beta_2 = 0, gamma (log_AF)=0) under the loglogistic setting (aft_mode="loglogistic") and administrative censoring only (lambda_c=0)
+## By default, the simulate_joint_dataset function simulates treatment 'scenario 4' (beta_2 = 0.04, gamma (log_AF)= -0.9) under the loglogistic setting (aft_mode="loglogistic") and administrative censoring only (lambda_c=0)
 ## To simulate over different scenarios, true data generation distributions and censoring proportions as described within the main manuscript, input the following parameters into 'simulate_joint_dataset'
 
 # Treatment effect scenarios: Scenario 1 (beta_2=0, log_AF=0), Scenario 2 (beta_2=0.04, log_AF=0.9), Scenario 3 (beta_2=-0.04, log_AF=0.9), Scenario 4 (beta_2=0.04, log_AF=-0.9), Scenario 5 (beta_2=-0.04, log_AF=-0.9), 
@@ -36,12 +40,12 @@ simulate_own_data <- FALSE # FALSE = use the pre-complied CSV files, TRUE = simu
 
 ## Load data
 if (!simulate_own_data) {
-  # Use pre-generated CSV files. These correspond to data generation for scenario 1 under global_seed=1
+  # Use pre-generated CSV files. These correspond to data generation for scenario 4 under global_seed=1
   longitudinal_data <- read.csv("simulated_longitudinal_data.csv")
   survival_data <- read.csv("simulated_survival_data.csv")
 } else {
   # Simulate data given a specific seed (global_seed)
-  sim_data <- simulate_joint_dataset(seed = global_seed, beta_2 = 0.00, log_AF = 0.00, aft_mode = "loglogistic", lambda_c = 0) # Default settings use 'scenario 1' for the loglogistic setting with administrative censoring only 
+  sim_data <- simulate_joint_dataset(seed = global_seed, beta_2 = 0.04, log_AF = -0.90, aft_mode = "loglogistic", lambda_c = -1) # Default settings use 'scenario 4' for the loglogistic setting with administrative censoring only 
   longitudinal_data <- sim_data$longitudinal
   survival_data <- sim_data$survival
 }
@@ -54,7 +58,7 @@ saftjm_model <- cmdstan_model("saft_jm.stan")
 
 # Fit longitudinal and survival submodels separately
 lmm_fit <- lme(fixed = Y_obs_centred ~ time+time:arm, random = ~ time|id, data = longitudinal_data) # Fit with LMM (linear mixed model)
-surv_fit <- survreg(Surv(T_obs, status) ~ arm, data = survival_data, dist = "weibull") # Fit with AFT (survival only component)
+surv_fit <- survreg(Surv(T_obs, status) ~ arm, data = survival_data, dist = "exponential") # Fit with AFT (survival only component)
 
 
 ### Construct data necessary for Stan
@@ -80,26 +84,27 @@ stan_data <- list(
   m = 5, # degree of bernstein polynomial
   s_long = s_long, # sample standard deviation of longitudinal outcome
   s_surv = s_surv, # sample standard deviation of survival scale
-  alpha_sd = (log(2) / 1.96) * (s_long / s_surv),
-  N_long = nrow(longitudinal_data),
-  Y_long = longitudinal_data$Y_obs_centred,
-  X_long = X_long,
-  N_1_long = length(id_levels),
-  J_1_long = J_1_long,
-  Z_1_1_long = rep(1, nrow(longitudinal_data)),
-  Z_1_2_long = longitudinal_data$time,
-  n = nrow(survival_data),
-  status = survival_data$status,
-  time = survival_data$T_obs,
-  X_surv = X_surv,
-  J_1_unique = J_1_unique,
-  X_long_surv = X_long_surv
+  alpha_sd = (log(2) / 1.96) * (s_long / s_surv), # standard deviation of the prior for the association parameter alpha, scaled by the ratio of the standard deviations of the longitudinal and survival outcomes
+  N_long = nrow(longitudinal_data), # number of longitudinal observations
+  Y_long = longitudinal_data$Y_obs_centred, # longitudinal outcome (centred)
+  X_long = X_long, # longitudinal covariate matrix
+  N_1_long = length(id_levels), # number of unique participants in the longitudinal data (used for indexing random effects)
+  J_1_long = J_1_long, # indexing variable for matching longitudinal observations to participants (used for indexing random effects)
+  Z_1_1_long = rep(1, nrow(longitudinal_data)),  # random intercept design matrix (currently only including random intercepts, but can be extended to include random slopes by adding additional columns and modifying the model code accordingly)
+  Z_1_2_long = longitudinal_data$time, # random slope design matrix (currently only including random slopes for time, but can be extended to include additional random effects by adding additional columns and modifying the model code accordingly)
+  n = nrow(survival_data), # number of survival observations
+  status = survival_data$status, # event indicator for survival data
+  time = survival_data$T_obs, # observed time for survival data
+  X_surv = X_surv, # survival covariate matrix
+  J_1_unique = J_1_unique, # indexing variable for matching survival observations to participants (used for indexing random effects)
+  X_long_surv = X_long_surv # longitudinal covariates mapped to the survival observation times (used for including the current value of the longitudinal outcome in the survival submodel
 )
 
+# Initialisation values for MCMC fitting
 init_values <- make_init(chains=4, lmm_fit, surv_fit)
 
 # Fit Stan model
-sAFT_fit <- saftjm_model$sample(
+sAFT_JM_fit <- saftjm_model$sample(
   data = stan_data,
   chains = 4,
   parallel_chains = 4,
@@ -110,18 +115,44 @@ sAFT_fit <- saftjm_model$sample(
 )
 
 
-# Comparison of results
-result_comparison <- data.frame(
-  Parameter = c("beta_long_intercept", "beta_long_time", "beta_long_time_arm", "beta_surv_arm", "alpha_tilde"),
-  LMM = c(fixef(lmm_fit)["(Intercept)"], fixef(lmm_fit)["time"], fixef(lmm_fit)["time:arm"], NA, NA),
-  AFT = c(NA, NA, NA, surv_fit$coefficients["arm"], NA),
-  sAFT = c(sAFT_fit$summary(c("beta_long[1], beta_long[2]", "beta_long[3]"))$mean, sAFT_fit$summary("beta_surv[1]")$mean, sAFT_fit$summary("alpha_tilde")$mean)
+
+### Formatting of results
+
+# Extract linear mixed model estimate and standard error
+lmm_est <- fixed.effects(lmm_fit) 
+lmm_se <- sqrt(diag(vcov(lmm_fit))) 
+
+# Extract sAFT-JM model estimate and standard error 
+sAFT_JM_vars <- c("beta_long[1]", "beta_long[2]", "beta_long[3]", "gamma[1]", "alpha") # Parameters of interest
+sAFT_JM_draws <- posterior::as_draws_df(sAFT_JM_fit$draws(variables = sAFT_JM_vars)) # Extract posterior draws 
+sAFT_JM_est <- sapply(sAFT_JM_vars, function(x) mean(sAFT_JM_draws[[x]])) 
+sAFT_JM_se <- sapply(sAFT_JM_vars, function(x) sd(sAFT_JM_draws[[x]])) 
+sAFT_JM_l95 <- sapply(sAFT_JM_vars, function(x) quantile(sAFT_JM_draws[[x]], 0.025)) 
+sAFT_JM_u95 <- sapply(sAFT_JM_vars, function(x) quantile(sAFT_JM_draws[[x]], 0.975)) 
+
+# Construct dataframe of results
+result_comparison <- data.frame(Parameter = c("beta_long_intercept", "beta_long_time", "beta_long_time_arm", "gamma", "alpha"), 
+                                LMM = c(lmm_est["(Intercept)"] + Y_obs_mean, lmm_est["time"], lmm_est["time:arm"], NA, NA), 
+                                LMM_SE = c(lmm_se["(Intercept)"], lmm_se["time"], lmm_se["time:arm"], NA, NA), 
+                                LMM_L95 = c(lmm_est["(Intercept)"] - 1.96*lmm_se["(Intercept)"] + Y_obs_mean, lmm_est["time"] - 1.96*lmm_se["time"], lmm_est["time:arm"] - 1.96*lmm_se["time:arm"], NA, NA), 
+                                LMM_U95 = c(lmm_est["(Intercept)"] + 1.96*lmm_se["(Intercept)"] + Y_obs_mean, lmm_est["time"] + 1.96*lmm_se["time"], lmm_est["time:arm"] + 1.96*lmm_se["time:arm"], NA, NA), 
+                                sAFT_JM = c(sAFT_JM_est["beta_long[1]"] + Y_obs_mean, sAFT_JM_est["beta_long[2]"], sAFT_JM_est["beta_long[3]"], sAFT_JM_est["gamma[1]"], sAFT_JM_est["alpha"]), 
+                                sAFT_JM_SE = c(sAFT_JM_se["beta_long[1]"], sAFT_JM_se["beta_long[2]"], sAFT_JM_se["beta_long[3]"], sAFT_JM_se["gamma[1]"], sAFT_JM_se["alpha"]), 
+                                sAFT_JM_L95 = c(sAFT_JM_l95["beta_long[1].2.5%"] + Y_obs_mean, sAFT_JM_l95["beta_long[2].2.5%"], sAFT_JM_l95["beta_long[3].2.5%"], sAFT_JM_l95["gamma[1].2.5%"], sAFT_JM_l95["alpha.2.5%"]), 
+                                sAFT_JM_U95 = c(sAFT_JM_u95["beta_long[1].97.5%"] + Y_obs_mean, sAFT_JM_u95["beta_long[2].97.5%"], sAFT_JM_u95["beta_long[3].97.5%"], sAFT_JM_u95["gamma[1].97.5%"], sAFT_JM_u95["alpha.97.5%"])) 
+
+
+# Format result comparison function (SE; 95% CI)
+format_result <- function(est, se, l95, u95) {
+  ifelse(is.na(est),"", paste0(round(est, 4)," (; ",round(l95, 4),", ",round(u95, 4),")"))
+}
+
+# Construct clean result comparison
+result_comparison_clean <- data.frame(
+  Parameter = result_comparison$Parameter,
+  LMM = format_result(result_comparison$LMM, result_comparison$LMM_SE, result_comparison$LMM_L95, result_comparison$LMM_U95),
+  sAFT_JM = format_result(result_comparison$sAFT_JM, result_comparison$sAFT_JM_SE, result_comparison$sAFT_JM_L95, result_comparison$sAFT_JM_U95)
 )
-result_comparison
-
-
-# Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
-plot_data <- data.frame()
-plot_comparison <- 2
+result_comparison_clean
 
 

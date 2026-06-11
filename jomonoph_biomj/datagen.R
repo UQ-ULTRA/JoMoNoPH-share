@@ -60,17 +60,14 @@ simulate_joint_dataset <- function(D = matrix(c(15^2, -0.10*15*0.20, -0.10*15*0.
   }
   
   # Censoring
-  if (lambda_c == 0) {
-    T_obs <- T_i
-    status <- rep(1L, n)
+  if (lambda_c <= 0) {
+    T_obs <- pmin(T_i, max_FU)
+    status <- as.integer(T_i <= max_FU)
   } else if (lambda_c > 0) {
     C_i <- rexp(n, rate = lambda_c)
     T_obs <- pmin(T_i, C_i, max_FU)
     status <- as.integer(T_i <= C_i & T_i <= max_FU)
-  } else {
-    T_obs <- pmin(T_i, max_FU)
-    status <- as.integer(T_i <= max_FU)
-  }
+  } 
   
   # Longitudinal data: expand each participant to their valid visit times
   long_data <- do.call(rbind, lapply(seq_len(n), function(i) {
