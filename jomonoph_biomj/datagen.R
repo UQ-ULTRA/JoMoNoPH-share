@@ -27,11 +27,9 @@ simulate_joint_dataset <- function(D = matrix(c(15^2, -0.10*15*0.20, -0.10*15*0.
   b0 <- b[, 1]; b1 <- b[, 2]
   
   # Acceleration components (vectorized over participants)
-  # Centre the current-value link at beta_0 so the baseline population mean
-  # does not feed into the AFT acceleration; only individual deviations (b0)
-  # from that reference drive the initial hazard.
+  # ENZAMET-style current-value link uses the raw baseline value.
   Y_ref <- beta_0
-  eta0 <- if (link_type == "value") b0 else rep(0, n)
+  eta0 <- if (link_type == "value") beta_0 + b0 else rep(0, n)
   C1 <- log_AF * arm + alpha_AFT * eta0
   C2 <- if (link_type %in% c("value", "slope")) {
     alpha_AFT * (beta_1 + beta_2 * arm + b1)

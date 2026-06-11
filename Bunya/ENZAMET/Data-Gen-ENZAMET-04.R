@@ -417,25 +417,25 @@ simulate_joint_dataset <- function(D,
 
 
 #--- Simulation ---
-# sim_data <- simulate_joint_dataset(
-#   D = D,
-#   beta_0 = beta_0,
-#   beta_1 = beta_1,
-#   beta_2 = beta_2,
-#   sigma_e = sigma_e,
-#   log_HR = log_HR,
-#   log_AF = log_AF,
-#   alpha_PH = alpha_PH,
-#   alpha_AFT = alpha_AFT,
-#   weibull_shape= weibull_shape,
-#   weibull_scale= weibull_scale,
-#   loglogistic_shape = loglogistic_shape,
-#   loglogistic_scale = loglogistic_scale,
-#   visit = visit,
-#   seed = 301,
-#   n_patients = n_patients,
-#   max_FU = max_FU,
-#   lambda_c = lambda_c,
-#   aft_mode =  "loglogistic",  # "PH" or "Weibull" or "loglogistic"
-#   link_type = "value" # "value" or "slope"
-# )
+sim_data <- simulate_joint_dataset(
+  D = D,
+  beta_0 = beta_0,
+  beta_1 = beta_1,
+  beta_2 = beta_2,
+  sigma_e = sigma_e,
+  log_HR = log_HR,
+  log_AF = log_AF,
+  alpha_PH = alpha_PH,
+  alpha_AFT = alpha_AFT,
+  weibull_shape= weibull_shape,
+  weibull_scale= weibull_scale,
+  loglogistic_shape = loglogistic_shape,
+  loglogistic_scale = loglogistic_scale,
+  visit = visit,
+  seed = 301,
+  n_patients = n_patients,
+  max_FU = max_FU,
+  lambda_c = -1,
+  aft_mode =  "loglogistic",  # "PH" or "Weibull" or "loglogistic"
+  link_type = "value" # "value" or "slope"
+)

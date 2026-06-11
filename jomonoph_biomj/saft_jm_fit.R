@@ -18,7 +18,7 @@ global_seed <- 4159125 # Change to whichever seed one wants simulation for (4159
 set.seed(global_seed)
 
 # Choice to use pre-compiled CSV files or generate data for a specific seed
-simulate_own_data <- FALSE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
+simulate_own_data <- TRUE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
 
 #### Scenarios used within manuscript
 
@@ -144,7 +144,7 @@ result_comparison <- data.frame(Parameter = c("beta_long_intercept", "beta_long_
 
 # Format result comparison function (SE; 95% CI)
 format_result <- function(est, se, l95, u95) {
-  ifelse(is.na(est),"", paste0(round(est, 4)," (; ",round(l95, 4),", ",round(u95, 4),")"))
+  ifelse(is.na(est),"", paste0(round(est, 4)," ( ",round(l95, 4),", ",round(u95, 4),")"))
 }
 
 # Construct clean result comparison
