@@ -128,6 +128,3 @@ make_init <- function(chains = 4, lmm_fit, surv_fit) {
 
 
 
-
-
-

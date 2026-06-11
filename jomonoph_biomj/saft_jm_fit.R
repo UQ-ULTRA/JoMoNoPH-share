@@ -94,10 +94,10 @@ sAFT_fit <- saftjm_model$sample(
 
 # Comparison of results
 result_comparison <- data.frame(
-  Parameter = c("beta_long_intercept","beta_long_time", "beta_long_time_arm", "beta_surv_arm", "alpha_tilde"),
+  Parameter = c("beta_long_intercept", "beta_long_time", "beta_long_time_arm", "beta_surv_arm", "alpha_tilde"),
   LMM = c(fixef(lmm_fit)["(Intercept)"], fixef(lmm_fit)["time"], fixef(lmm_fit)["time:arm"], NA, NA),
   AFT = c(NA, NA, NA, surv_fit$coefficients["arm"], NA),
-  sAFT = c(sAFT_fit$summary(c("beta_long[1],beta_long[2]", "beta_long[3]"))$mean, sAFT_fit$summary("beta_surv[1]")$mean, sAFT_fit$summary("alpha_tilde")$mean)
+  sAFT = c(sAFT_fit$summary(c("beta_long[1], beta_long[2]", "beta_long[3]"))$mean, sAFT_fit$summary("beta_surv[1]")$mean, sAFT_fit$summary("alpha_tilde")$mean)
 )
 result_comparison
 
