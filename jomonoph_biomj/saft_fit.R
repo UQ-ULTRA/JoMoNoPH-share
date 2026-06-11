@@ -69,6 +69,7 @@ stan_data <- list(
   alpha_sd = (log(2) / 1.96) * (s_long / s_surv),
   N_long = nrow(longitudinal_data),
   Y_long = longitudinal_data$Y_obs_centred,
+  Y_long_sample_mean = Y_obs_mean,
   X_long = X_long,
   N_1_long = length(id_levels),
   J_1_long = J_1_long,
