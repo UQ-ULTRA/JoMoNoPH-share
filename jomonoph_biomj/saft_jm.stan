@@ -13,7 +13,6 @@ functions {
     matrix X_surv, // survival model design matrix 
     real alpha, // association parameter
     vector Y_long_surv, // longitudinal model fitted values at survival times
-    real Y_long_sample_mean, // longitudinal outcome sample mean
     vector bp_pdf_coef, // bernstein basis coefficients for the pdf (binomial coefficients)
     vector bp_pdf_to_cdf_coef, // coefficients to convert from pdf to cdf basis (m / k)
     int m // degree of the bernstein polynomial for the baseline hazard
@@ -30,12 +29,8 @@ functions {
     // assuming current value linkage between the longitudinal model and the AFT model
     // given the mean effect (without the random error):
     // Y*(t) = beta0 + beta1 * t + beta2 * t * arm + b0 + b1 * t
-    
-    
-    vector[n] Y_link_surv = Y_long_surv - Y_long_sample_mean;
     vector[n] eta_surv = X_surv * beta_surv;
-    vector[n] C1 = eta_surv + alpha * (beta_long[1] + b_long[,1] - Y_link_surv);
-    // vector[n] C1 = eta_surv + alpha * (beta_long[1] + b_long[,1]);
+    vector[n] C1 = eta_surv + alpha * (beta_long[1] + b_long[,1]);
     vector[n] C2 = alpha * (beta_long[2] + X_surv[,1] * beta_long[3] + b_long[,2]);
     linpred_surv = eta_surv + alpha * Y_long_surv;
     
@@ -112,8 +107,6 @@ data {
   //// linking data
   array[n] int<lower=1> J_1_unique;
   matrix[n, K_long] X_long_surv;
-  
-  real Y_long_sample_mean; // sample mean of longitudinal outcome
 }
 
 // Transformed data
@@ -197,7 +190,7 @@ model {
   gamma ~ normal(0, 1) T[0, ]; 
 
   // survival likelihood
-  target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, Y_long_sample_mean, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
+  target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
 }
 
 // Generated quantities
@@ -205,7 +198,7 @@ generated quantities {
   
   // participant-level joint log likelihood generation, used for LOO/WAIC statistics
   vector[n] log_lik;
-  vector[n] log_lik_surv = loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, Y_long_sample_mean, bp_pdf_coef, bp_pdf_to_cdf_coef, m);
+  vector[n] log_lik_surv = loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m);
   vector[n] log_lik_long = rep_vector(0, n);
   vector[N_long] mu_long_ic = X_long * beta_long + b_long[J_1_long, 1] .* Z_1_1_long + b_long[J_1_long, 2] .* Z_1_2_long;
 

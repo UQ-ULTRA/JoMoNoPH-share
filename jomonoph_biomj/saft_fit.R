@@ -31,7 +31,6 @@ if (!simulate_own_data) {
   survival_data <- sim_data$survival
 }
 
-# Centre the longitudinal outcome
 Y_obs_mean <- mean(longitudinal_data$Y_obs)
 longitudinal_data$Y_obs_centred <- longitudinal_data$Y_obs - Y_obs_mean
 
@@ -69,7 +68,6 @@ stan_data <- list(
   alpha_sd = (log(2) / 1.96) * (s_long / s_surv),
   N_long = nrow(longitudinal_data),
   Y_long = longitudinal_data$Y_obs_centred,
-  Y_long_sample_mean = Y_obs_mean,
   X_long = X_long,
   N_1_long = length(id_levels),
   J_1_long = J_1_long,
@@ -103,14 +101,13 @@ result_comparison <- data.frame(
 )
 result_comparison
 
+
 # Plot comparison of estimate and 95% credible/confidence intervals for key parameters of interest
 plot_data <- data.frame()
-# plot_comparison <- 
+plot_comparison <- 
   
   
   
-print(original_scale_lmm_t_table)
+  print(original_scale_lmm_t_table)
 print(summary(surv_fit))
 print(original_scale_sAFT_summary)
-
-
