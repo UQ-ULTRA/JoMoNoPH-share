@@ -80,23 +80,22 @@ stan_data <- list(
   m = 5, # degree of bernstein polynomial
   s_long = s_long, # sample standard deviation of longitudinal outcome
   s_surv = s_surv, # sample standard deviation of survival scale
-  alpha_sd = (log(2) / 1.96) * (s_long / s_surv), # standard deviation of the prior for the association parameter alpha, scaled by the ratio of the standard deviations of the longitudinal and survival outcomes
-  N_long = nrow(longitudinal_data), # number of longitudinal observations
-  Y_long = longitudinal_data$Y_obs_centred, # longitudinal outcome (centred)
-  X_long = X_long, # longitudinal covariate matrix
-  N_1_long = length(id_levels), # number of unique participants in the longitudinal data (used for indexing random effects)
-  J_1_long = J_1_long, # indexing variable for matching longitudinal observations to participants (used for indexing random effects)
-  Z_1_1_long = rep(1, nrow(longitudinal_data)),  # random intercept design matrix (currently only including random intercepts, but can be extended to include random slopes by adding additional columns and modifying the model code accordingly)
-  Z_1_2_long = longitudinal_data$time, # random slope design matrix (currently only including random slopes for time, but can be extended to include additional random effects by adding additional columns and modifying the model code accordingly)
-  n = nrow(survival_data), # number of survival observations
-  status = survival_data$status, # event indicator for survival data
-  time = survival_data$T_obs, # observed time for survival data
-  X_surv = X_surv, # survival covariate matrix
-  J_1_unique = J_1_unique, # indexing variable for matching survival observations to participants (used for indexing random effects)
-  X_long_surv = X_long_surv # longitudinal covariates mapped to the survival observation times (used for including the current value of the longitudinal outcome in the survival submodel
+  alpha_sd = (log(2) / 1.96) * (s_long / s_surv),
+  N_long = nrow(longitudinal_data),
+  Y_long = longitudinal_data$Y_obs_centred,
+  X_long = X_long,
+  N_1_long = length(id_levels),
+  J_1_long = J_1_long,
+  Z_1_1_long = rep(1, nrow(longitudinal_data)),
+  Z_1_2_long = longitudinal_data$time,
+  n = nrow(survival_data),
+  status = survival_data$status,
+  time = survival_data$T_obs,
+  X_surv = X_surv,
+  J_1_unique = J_1_unique,
+  X_long_surv = X_long_surv
 )
 
-# Initialisation values for MCMC fitting
 init_values <- make_init(chains=4, lmm_fit, surv_fit)
 
 # Fit Stan model

@@ -5,10 +5,10 @@ functions {
   // aft joint survival log likelihood function
   vector loglik_aft_jm(
     vector time, // survival times
-    vector beta_surv, // survival model population-level effects
+    vector gamma, // survival model population-level effects
     vector beta_long, // longitudinal model population-level effects
     matrix b_long, // longitudinal model group-level effects
-    vector gamma, // baseline hazard coefficients
+    vector theta, // baseline hazard coefficients
     vector status, // event indicators
     matrix X_surv, // survival model design matrix 
     real alpha, // association parameter
@@ -29,7 +29,7 @@ functions {
     // assuming current value linkage between the longitudinal model and the AFT model
     // given the mean effect (without the random error):
     // Y*(t) = beta0 + beta1 * t + beta2 * t * arm + b0 + b1 * t
-    vector[n] eta_surv = X_surv * beta_surv;
+    vector[n] eta_surv = X_surv * gamma;
     vector[n] C1 = eta_surv + alpha * (beta_long[1] + b_long[,1]);
     vector[n] C2 = alpha * (beta_long[2] + X_surv[,1] * beta_long[3] + b_long[,2]);
     linpred_surv = eta_surv + alpha * Y_long_surv;
@@ -51,15 +51,15 @@ functions {
     h0 = rep_vector(0.0, n); 
     H0 = rep_vector(0.0, n);
 
-    vector[m] gamma_cum = cumulative_sum(gamma);
+    vector[m] theta_cum = cumulative_sum(theta);
     vector[n] y_pw = rep_vector(1.0, n);
     vector[n] omy_pw = pow(omy, m - 1);
     
     
     for (k in 1:m) {
       vector[n] bern_pdf = bp_pdf_coef[k] * y_pw .* omy_pw;
-      h0 += gamma[k] * bern_pdf;
-      H0 += gamma_cum[k] * bp_pdf_to_cdf_coef[k] * (kappa_scaled .* bern_pdf);
+      h0 += theta[k] * bern_pdf;
+      H0 += theta_cum[k] * bp_pdf_to_cdf_coef[k] * (kappa_scaled .* bern_pdf);
       if (k < m) {
         y_pw .*= kappa_scaled;
         omy_pw ./= omy;
@@ -136,8 +136,8 @@ parameters {
 
   //// survival parameters
   
-  vector[q] beta_surv;  
-  vector<lower=0>[m] gamma; // BP basis weights for baseline hazard (arm = 0)
+  vector[q] gamma;  
+  vector<lower=0>[m] theta; // BP basis weights for baseline hazard (arm = 0)
 
   //// linking parameter
   // association between longitudinal and survival submodels
@@ -183,14 +183,14 @@ model {
   Y_long ~ normal(mu_long, sigma_long);
 
   //// survival priors
-  beta_surv ~ normal(0, 10);
+  gamma ~ normal(0, 10);
   alpha_tilde ~ normal(0, alpha_sd);
   
   // bernstein polynomial weight
-  gamma ~ normal(0, 5) T[0, ]; 
+  theta ~ normal(0, 5) T[0, ]; 
 
   // survival likelihood
-  target += sum(loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
+  target += sum(loglik_aft_jm(time, gamma, beta_long, b_long, theta, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m));
 }
 
 // Generated quantities
@@ -198,7 +198,7 @@ generated quantities {
   
   // participant-level joint log likelihood generation, used for LOO/WAIC statistics
   vector[n] log_lik;
-  vector[n] log_lik_surv = loglik_aft_jm(time, beta_surv, beta_long, b_long, gamma, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m);
+  vector[n] log_lik_surv = loglik_aft_jm(time, gamma, beta_long, b_long, theta, status, X_surv, alpha, Y_long_surv, bp_pdf_coef, bp_pdf_to_cdf_coef, m);
   vector[n] log_lik_long = rep_vector(0, n);
   vector[N_long] mu_long_ic = X_long * beta_long + b_long[J_1_long, 1] .* Z_1_1_long + b_long[J_1_long, 2] .* Z_1_2_long;
 

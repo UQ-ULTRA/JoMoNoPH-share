@@ -105,8 +105,8 @@ make_init <- function(chains = 4, lmm_fit, surv_fit) {
   sd_b_init <- sqrt(as.numeric(vc[c("(Intercept)", "time"), "Variance"]))
   sd_b_init <- pmax(sd_b_init, 1e-3)
   
-  beta_surv_init <- as.numeric(coef(surv_fit)["arm"])
-  if (!is.finite(beta_surv_init)) beta_surv_init <- 0
+  gamma_init <- as.numeric(coef(surv_fit)["arm"])
+  if (!is.finite(gamma_init)) gamma_init <- 0
   
   lapply(seq_len(chains), function(chain_id) {
     rho <- -0.1
@@ -119,8 +119,8 @@ make_init <- function(chains = 4, lmm_fit, surv_fit) {
       sd_1_long = pmax(sd_b_init + rnorm(2, 0, 0.02), 1e-3),
       z_1_long = matrix(rnorm(2 * stan_data$N_1_long, 0, 0.2), nrow = 2),
       L_1_long = L_init,
-      beta_surv = rnorm(stan_data$q, beta_surv_init, 0.05),
-      gamma = pmax(rnorm(stan_data$m, 0.1, 0.01), 1e-4),
+      gamma = rnorm(stan_data$q, gamma_init, 0.05),
+      theta = pmax(rnorm(stan_data$m, 0.1, 0.01), 1e-4),
       alpha_tilde = rnorm(1, 0, 0.05)
     )
   })
