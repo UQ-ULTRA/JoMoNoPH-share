@@ -14,11 +14,11 @@ setwd(here("jomonoph_biomj"))
 source("datagen.R")  # Source file for data generation and MCMC initialisation functions
 
 # Set seed for reproducibility
-global_seed <- 4159125 # Change to whichever seed one wants simulation for (4159125)
+global_seed <- 854098 # Change to whichever seed one wants simulation for (854098)
 set.seed(global_seed)
 
 # Choice to use pre-compiled CSV files or generate data for a specific seed
-simulate_own_data <- TRUE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
+simulate_own_data <- FALSE # FALSE = use the pre-complied CSV files, TRUE = simulate data for a specific seed (global_seed)
 
 #### Scenarios used within manuscript
 
@@ -28,7 +28,7 @@ simulate_own_data <- TRUE # FALSE = use the pre-complied CSV files, TRUE = simul
 # Treatment effect scenarios: Scenario 1 (beta_2=0, log_AF=0), Scenario 2 (beta_2=0.04, log_AF=0.9), Scenario 3 (beta_2=-0.04, log_AF=0.9), Scenario 4 (beta_2=0.04, log_AF=-0.9), Scenario 5 (beta_2=-0.04, log_AF=-0.9), 
 # Baseline hazard distributions: Log-logistic (aft_mode="loglogistic"), Weibull with shape=0.90 (aft_mode="weibull",weibull_shape=0.9), Weibull with shape=1.30 (aft_mode="weibull",weibull_shape=1.3), Weibull with shape=2.10 (aft_mode="weibull",weibull_shape=2.1)
 
-# Censoring proportion (if using 50% censoring) is treatment scenario and baseline hazard distribution dependent. If only using administrative censoring, use 'lambda_c=0', otherwise, use the following 'lambda_c = XX' values for your specific treatment + baseline hazard scenario
+# Censoring proportion (if using 50% censoring) is treatment scenario and baseline hazard distribution dependent. If only using administrative censoring, use 'lambda_c=-1', otherwise, use the following 'lambda_c = XX' values for your specific treatment + baseline hazard scenario
 
 # Log-logistic: 0.009948730 (scen 1), 0.003906250 (scen 2), 0.004272461 (scen 3), 0.017028809 (scen 4), 0.017211914 (scen 5) 
 # Weibull (shape 0.9): 0.009643555 (scen 1), 0.003479004 (scen 2), 0.003784180 (scen 3), 0.017211914, (scen 4) 0.017456055 (scen 5) 
