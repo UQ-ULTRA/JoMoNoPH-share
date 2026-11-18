@@ -1,0 +1,12 @@
+"package_path","original_path","bytes","md5","matches_original"
+"production/Bunya/ENZAMET/Data-Gen-ENZAMET-01.R","Bunya/ENZAMET/Data-Gen-ENZAMET-01.R",15366,"bdf59e266710c3ac2d7194b3487f2945",TRUE
+"production/Bunya/ENZAMET/Data-Gen-ENZAMET-02.R","Bunya/ENZAMET/Data-Gen-ENZAMET-02.R",14823,"2e4b632f0a69dfd6ae42ff6e38a1be28",TRUE
+"production/Bunya/ENZAMET/Data-Gen-ENZAMET-03.R","Bunya/ENZAMET/Data-Gen-ENZAMET-03.R",14826,"7c8e075d2c40d3e8632d8d2a1a61d072",TRUE
+"production/Bunya/ENZAMET/Data-Gen-ENZAMET-04.R","Bunya/ENZAMET/Data-Gen-ENZAMET-04.R",14772,"579f80a39e76e2a2e0a4c96159742aab",TRUE
+"production/Bunya/ENZAMET/Data-Gen-ENZAMET-05.R","Bunya/ENZAMET/Data-Gen-ENZAMET-05.R",14822,"ab6332a8cce7ea79be11d5f4a99b7ce1",TRUE
+"production/Bunya/ENZAMET/ENZAMET-DM.R","Bunya/ENZAMET/ENZAMET-DM.R",61521,"3f5abc77da488aa0925f3a259130dd1b",TRUE
+"production/Bunya/ENZAMET/ENZAMET-JMbayes2-DM.R","Bunya/ENZAMET/ENZAMET-JMbayes2-DM.R",37842,"2711ea0cfbad7c650d243b9ad9724db9",TRUE
+"production/Bunya/Manuscript/generate_ENZAMET_manuscript_outputs.R","Bunya/Manuscript/generate_ENZAMET_manuscript_outputs.R",85612,"4558c13eaeeba662b456cf2836900f24",TRUE
+"production/Bunya/SumSimRes-ENZAMET-DM.R","Bunya/SumSimRes-ENZAMET-DM.R",80093,"30b18d45e691c5d71d8632ca31148d06",TRUE
+"production/Bunya/SumSimRes-ENZAMET-JMbayes2-DM.R","Bunya/SumSimRes-ENZAMET-JMbayes2-DM.R",49393,"d74e28caa3a227c001748cd347b17eea",TRUE
+"production/Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan","Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan",9454,"cc075c6bc9b1dbeecfc60af395f5e0ba",TRUE
