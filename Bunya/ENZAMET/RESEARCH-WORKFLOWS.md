@@ -11,12 +11,38 @@ labels therefore do not guarantee that running them now recreates the old fit.
 Do not backdate commits, silently replace shared code, or submit old jobs merely
 to test these archives. Files remain at their existing paths to preserve calls.
 
+## Completed Commit And Push Record
+
+The nine approved commits below were created in this order and pushed to
+`origin/main` (`https://github.com/UQ-ULTRA/JoMoNoPH-share.git`). They record the
+repository organisation, not the original dates when the experiments ran.
+
+| Scope | Commit | Contents |
+| --- | --- | --- |
+| Housekeeping | `ee70c5b` | Exclude generated results; retain small audit inputs |
+| Group 1 | `edafd84` | Early test/rescue wrappers, this index and generated-HTML ignore rule |
+| Group 2 | `f172d14` | Standard BP prior and shape-penalty experiments |
+| Group 3 | `bce9825` | Alternative BP implementation experiments |
+| Group 4 | `f9e1f89` | Zero-prior pilot and final sAFT rescue workflows |
+| Group 5 | `60bd707` | JMbayes2 comparator workflows and aggregation |
+| Group 6A | `9d02c1c` | Original application, aggregation, presentation and HPC setup |
+| Group 6B | `7959dfa` | Historical reproducibility review notes |
+| Group 7 | `fbb8523` | Self-contained reproducibility package: 45 files |
+
+Group 7 includes editor-facing defaults (`task = "check"`, `collection = "main"`,
+`summaries = "saved"`) and refreshed manifest entries. Both non-sampling regression
+tests passed in a temporary package copy, and all 19 R files parsed. This commit
+preparation did not rerun MCMC or change scientific settings or saved results.
+Large result archives and generated outputs were not uploaded. The six deferred
+files listed below remain locally modified or untracked and were not part of
+these commits or the push.
+
 ## Group 1: Earlier Test And Rescue Wrappers
 
 - `Bunya/ENZAMET/ENZAMET-DM.slurm`
 - `Bunya/ENZAMET/ENZAMET-DM-test-rescue.slurm`
 
-The first wrapper's pending change reduces memory from 20 GB to 16 GB. These
+The committed change to the first wrapper reduces memory from 20 GB to 16 GB. These
 40-config/10-replicate launchers use the historical td12-labelled output folder
 and current `ENZAMET-DM.R`; they do not themselves pin the old model, treedepth
 or prior settings. Preserve them as historical wrappers, not current production.
@@ -95,11 +121,11 @@ rescue targets the final collection. All use the already-tracked generators.
 - `Stan/compile-stan-models.slurm`
 
 The application script requires restricted ENZAMET data and is not the public
-mock example. The original sAFT aggregation script is already tracked; its pending
-change selects alpha300 instead of the main collection as the default input.
-Include that change as requested, without altering its aggregation calculations.
+mock example. The committed change to the original sAFT aggregation script
+selects alpha300 instead of the main collection as the default input, without
+altering its aggregation calculations.
 The presentation generator reads summaries in original project locations. The
-pending compilation-wrapper change redirects logs. These files preserve original
+committed compilation-wrapper change redirects logs. These files preserve original
 workflows; they do not replace the self-contained audit copies.
 
 ## Group 6B: Historical Review Notes (Separate Commit)
@@ -114,7 +140,7 @@ since been resolved or superseded; the historical text is retained.
 
 ## Group 7: Editor-Facing Reproducibility Package
 
-Commit Git-eligible files under `reproducibility-BiomJ/` separately after reviewing
+Git-eligible files under `reproducibility-BiomJ/` were committed separately after
 the earlier groups. Its local sources are the versions tested for the audit;
 do not replace them with the older drivers above. Large production results and
 generated outputs remain excluded, while the synthetic mock input is included.
@@ -134,12 +160,12 @@ generated outputs remain excluded, while the synthetic mock input is included.
   do not present this as a complete runnable model without resolving that dependency.
 
 Deferred means retained locally for an explicit later decision, not deleted,
-reverted or silently added to an unrelated commit. Each group still requires
-approval of its exact staged scope before committing; pushes require separate approval.
+reverted or silently added to an unrelated commit. Future changes require
+approval of their exact staged scope before committing; pushes require separate approval.
 
 ## Generated Side Product: Excluded From Git
 
 `Bunya/Bunya-simulation-setup.html` is the rendered counterpart of the Markdown
-guide. It is ignored and retained locally; commit the source `.md` in Group 6A.
-The new ignore rule is a pending housekeeping change, not an amendment of the
-already-created Step 1 commit.
+guide. It is ignored and retained locally; the source `.md` was committed in
+Group 6A. The generated-HTML ignore rule was committed in Group 1, without
+amending the earlier housekeeping commit.
