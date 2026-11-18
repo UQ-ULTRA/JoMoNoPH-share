@@ -1,33 +1,53 @@
-# Detailed 2026 Checklist: Verification And Remaining Author Actions
+# Detailed Checklist: Responses And Mark Review
 
-This is evidence for completing the journal checklist, not a signed declaration
-of universal compliance. Section numbers refer to the supplied six-page
-`Reproducible-Research-Author-Checklist-2026.pdf`.
+Reviewed on 19 November 2026 against all six rendered pages of
+`Reproducible-Research-Author-Checklist-2026_completed.pdf`. The PDF marks were
+not changed. Locations below use the printed page numbers. These notes record
+observed marks, evidence and recommended qualifications; they are not a blanket
+certification that every checked sentence is literally satisfied.
 
-| Item | Evidence / status |
-|---|---|
-| Sections 2-3: code/data and intermediate results | Five complete saved simulation collections; source and three workflows supplied. All numbered simulation results in author-selected arXiv v1 are covered. Restricted real-data Table 1 and PH diagnostic p-values are exceptions; mock results are not numerical replacements. See manuscript-coverage.md. |
-| Repeated settings without copied scenario scripts | Shared simulator/coefficient table and local task runner; arbitrary configuration and replicate selection. |
-| Output/result association | manuscript_map.csv gives exact arXiv:2606.16080v1 numbering/pages. Nine simulation table bodies match; all three figures render identically. Check any subsequent journal-version changes. |
-| RNG and selected-replicate reproduction | Original configuration/replicate seed rule and RNG kinds retained. Controlled cleanup checks passed; see code-equivalence.md. Cross-platform MCMC equality is not claimed. |
-| Monte Carlo stability across seeds | Archived studies use 1,000 independently seeded datasets per configuration. No new full-study reruns or comprehensive method-ranking stability study were performed during cleanup; author must assess/report this item honestly. |
-| Restricted case-study data | Mock data, code, reference results and a completed local mock run supplied. No actual ENZAMET participant data included. |
-| Long computations / spot checks | Archived intermediates regenerate results without sampling; selected IDs run independently, normally five replicates per configuration. |
-| Section 4: software documentation | README links software-environment.md, including loaded-package sessionInfo; per-fit compiler/build/library records supplied. Unrecorded historical versions are explicitly identified, not invented. |
-| Running instructions and manual edits | One R settings block selects tasks and datasets; no repeated edits to numerical algorithms. Optional terminal interface uses the same engine. |
-| Data provenance / licensing | Data dictionary supplied. Copyright holders, redistribution permissions and final license terms require author/coauthor confirmation. |
-| Parallelization / runtimes / hardware | README and local-fit-notes.md; four chains, configurable concurrency, sequential datasets. |
-| Section 5: organization / function documentation | Clean local sources, shared generator and function-reference.md. Source formatting changes do not alter numerical expressions. |
-| Workspace / software installation | No workspace-clearing command in the runnable sources; no automatic installation. Temporary task options/environment/RNG/parallel state restored. |
-| Paths / platform dependence | Package-relative inputs and separate outputs; no RStudio API requirement. Platform-specific metadata queries are guarded and do not control inference. Independent second-platform testing is still required. |
-| Compiled code | Stan source and local CmdStan/toolchain instructions supplied. Confirm with the editor whether locally compiled Stan models satisfy the checklist's precompiled-executable wording; platform-specific binaries are not supplied. |
-| Single ZIP / large files | Pending final packaging, external archive URL/checksum and unauthenticated editor access. |
-| Independent reproduction | Pending a coauthor's test of the final package on another machine and final comparison/reporting of diagnostics. |
+## Unchecked Boxes
 
-## Do Not Certify Yet
+| Page / item opening | Current mark | Response / recommended action |
+|---|---|---|
+| 1, Section 2: "We have verified that re-running..." | Unchecked | Keep pending until a coauthor has independently tested the final package. Local simulation reaggregation and manuscript-output checks passed, but restricted real-data results have a mock-data substitute. |
+| 1, Section 2: "The code and data supplement has been uploaded..." | Unchecked | Final clean ZIP, external archive link/checksum and delivery/access verification are still pending. |
+| 2, RNG: "By re-running any code... multiple times with different seeds..." | Unchecked | Appropriate. Production uses 1,000 independently seeded datasets per configuration, but an additional full-study rerun demonstrating unchanged rankings/conclusions has not been established. No such result is claimed. |
+| 3, restricted data: "The original data has been made available..." | Unchecked | Appropriate: restricted ENZAMET data are not supplied. The preceding synthetic/pseudo-data option is checked and is the chosen alternative. |
+| 3, long computations: "The code supplement provides intermediate results..." | Unchecked | Intermediate results and regeneration code exist locally; leave delivery pending until the download is supplied and verified. The page 3 footnote excludes OneDrive; use a suitable repository or obtain the editor's agreement to another transfer route. |
+| 4, documentation: "contains full documentation for all data sets including their provenance..." | Unchecked | Data provenance/dictionary are supplied, but copyright, redistribution permissions and final licensing need author/coauthor confirmation. |
+| 4, documentation: "explicitly describes the usage of parallelisation..." | Unchecked | Can be checked: README explains parallel_chains, four total chains, sequential datasets and single-process aggregation. This is already checked in the essential checklist. |
+| 6, compiled code: "The supplement includes both the documented source code..." | Unchecked | Explain the exception: Stan source and local CmdStan/toolchain instructions are supplied, not machine-specific precompiled executables. Do not claim the executable requirement is fulfilled. |
 
-Any manuscript changes after the mapped version, restricted-data exceptions,
-licensing, large-archive access and independent reproduction require author sign-off.
-Missing historical environment details
-and Stan's cross-platform numerical limitations should be disclosed to the RR
-editor rather than represented as exact reproducibility guarantees.
+## Checked Boxes Requiring Qualification
+
+| Page / item opening | Observed mark | Qualification / recommendation |
+|---|---|---|
+| 1, Section 3: "The code and data supplement contains all code and data..." | Checked | All numbered simulation results in arXiv:2606.16080v1 are mapped. Real-data Table 1 and Section 4's PH p-values require restricted ENZAMET data; mock data reproduce the fitting procedure and mock references only. See manuscript-coverage.md. |
+| 2: "They create dataframes or tables with identical structure..." | Checked | All nine simulation table bodies match at displayed precision. Presentation differs in font size, captions/model labels and NA versus dash markers; identical PDF layout is not claimed. Exact numbers/pages are in manuscript_map.csv. |
+| 2, RNG: "Any code whose output relies on... RNG..." | Checked | Seeds are retained, but the box also asserts exact identity to manuscript results. Add an explicit Stan cross-platform qualification or leave it unchecked with this explanation; do not present the current tick as unconditional exact numerical identity. |
+| 3, spot checks: "We have verified that the code and intermediate results... enable spot checks..." | Checked | Selected original configurations/replicates are independently runnable and paired with archived references. The sentence's exact-identity claim needs the same Stan qualification. Use uncertainty and diagnostics, not bitwise equality, to assess different environments. |
+| 3, software: "contains version information for all the software..." | Checked | The local session and per-fit build/environment records are supplied. Complete historical Bunya OS/compiler/package versions were not retained. No Docker/renv environment or recovery of missing historical versions is claimed. |
+| 4, style: "All code files use a consistent, sensible format and style..." | Checked | The stated maximum of 80-100 characters is not met throughout: several R/Stan files retain longer lines. Explicitly qualify this criterion or leave it unchecked; strict line-length compliance cannot be certified. No formatting changes were made in this review. |
+| 5: "Code files do not contain extraneous or outdated code..." | Checked | The manuscript generator retains additional unpublished plots/tables and the comparator includes extra fitted models. These are documented research/audit extras, not additional published results. Qualify the literal claim that every function/output is only for published results, or leave it unchecked. |
+| 5: "Code files do not contain commands that affect users' global workspace..." | Checked | No automatic package installation or whole-workspace clearing is used. Tasks do temporarily set process environment variables/options/RNG controls and restore the recorded task settings on exit; the literal assertion that no variables are modified needs this explanation. |
+
+## Supporting Evidence And Remaining Sign-Off
+
+README describes the three workflows, editable settings, package-relative paths,
+runtimes and hardware. The shared generator avoids near-duplicate scenario
+scripts. Function interfaces and data fields are documented in
+function-reference.md and data_dictionary.md. The RStudio project is optional;
+the same scripts can run through R directly. Platform-specific environment
+queries are guarded, not model inputs.
+
+Source/input cleanup checks and existing local fits are documented in
+code-equivalence.md and validation-report.md. Nine simulation table bodies and
+all three published figures were compared with the arXiv source; see
+manuscript-coverage.md. These checks do not establish exact cross-platform
+sampling or independent testing of the final submission ZIP.
+
+Recommended PDF revisions are to check the documented parallelisation item and
+to qualify or clear the exact-identity, line-length and published-code-only
+claims above. Author decisions, permissions, archive delivery and independent
+testing remain outstanding. The copied PDFs were deliberately left unchanged.

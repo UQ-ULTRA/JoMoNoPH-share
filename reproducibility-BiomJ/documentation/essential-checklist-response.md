@@ -1,32 +1,33 @@
-# Essential Checklist: Draft Author Response
+# Essential Checklist: Responses And Mark Review
 
-Status is deliberately qualified. The authors should review and sign off before
-submitting the supplied essential PDF checklist; this file is not a false claim
-that every final-submission requirement has already been met.
+Reviewed on 19 November 2026 against
+`Checklist_for_authors_essential_V1.0_completed.pdf`. The first ten boxes are
+checked; the final two are unchecked. Those marks are appropriate for the
+current preparation stage, subject to the qualifications below. The PDF was
+not changed. These notes accompany, rather than replace, the completed checklist.
 
-| Essential item | Status and evidence |
-|---|---|
-| README and software versions | Implemented. README, `--mode=check`, per-run environment records. Historical complete compiler/hardware versions were not all retained. |
-| Exact running instructions / one main file | Start with `run_checks.R` and the root README in RStudio; `main.R` is an optional terminal equivalent. |
-| All code/data for results | Full simulation intermediates and relevant production/aggregation/presentation code included. All numbered simulation results mapped against author-selected arXiv v1. Restricted ENZAMET Table 1 and PH diagnostic p-values are explicit exceptions; mock fitting/results are a procedural substitute only. See manuscript-coverage.md. |
-| Outputs linked to manuscript | `manuscript_map.csv` records exact arXiv:2606.16080v1 table/figure numbers and pages. Nine simulation table bodies match and three figures render identically. Recheck if the journal revision differs. |
-| Seeded simulations | Implemented with original configuration IDs, per-replicate seeds, R RNG kind and chain IDs. Exact cross-platform Stan equality cannot be certified. |
-| Runtime and hardware | Historical runtime summaries included; README describes Bunya EPYC3/EPYC4 and new-run metadata. New local test timings recorded when completed. |
-| Parallelization explained | README documents four chains, sequential datasets and `--parallel-chains`. |
-| Avoid absolute paths | Runnable local sources use package-relative paths. Original hard-coded driver paths and SLURM dispatch were removed. Recorded run metadata may retain the actual machine paths used during execution. |
-| Organized files | Separate local source, archived references and regenerated output. One shared scenario generator replaces five duplicated scripts. |
-| Helpful comments | Local runner and scientific stages are commented; function-reference.md describes inputs, outputs and side effects. Numerical cleanup checks are documented in code-equivalence.md. |
-| Intermediate results / reduced checks | Full post-rescue collections plus a local runner supporting five replicates per selected configuration, all three alpha settings and all comparator models. Current local completion is reported explicitly in `output/local-simulations/editor-records/progress.csv`. |
-| Single ZIP, no unnecessary files | PENDING author packaging/delivery. Full archive is too large for normal email; upload to an accessible repository and add URL/checksum if supplied separately. No cloud link has been invented. |
+| Essential item (PDF order) | Observed mark | Response / qualification |
+|---|---|---|
+| 1. Include a README file | Checked | README and software-environment.md document dependencies and the recorded local environment. Historical Bunya OS/compiler/package details were not all retained; complete historical environment identity is not claimed. |
+| 2. Describe how to run your code | Checked | Open run_checks.R in the supplied R project. The README gives three independent workflows; main.R is an optional terminal interface to the same implementation. |
+| 3. Include all code/data | Checked; mock-data qualification | All numbered simulation results in author-selected arXiv:2606.16080v1 are mapped. Restricted ENZAMET Table 1 and the PH diagnostic p-values cannot be reproduced from the public inputs. As permitted by the checklist, synthetic data and mock references exercise the case-study fitting procedure instead. See manuscript-coverage.md. |
+| 4. Link outputs to manuscript results | Checked | manuscript_map.csv gives exact table/figure numbers and pages. Nine simulation table bodies match the source and three figures render identically with the same renderer. Table typography, captions and unavailable-value markers can differ. |
+| 5. Ensure simulations are reproducible | Checked; Stan qualification | Original configuration/replicate seeds, R RNG kinds and chain IDs are retained. Controlled generator/input checks match on the recorded environment. Numerical agreement is assessed with diagnostics and Monte Carlo uncertainty; bitwise-identical MCMC across different hardware/toolchains is not promised. |
+| 6. Report runtime and hardware | Checked | README, software-environment.md and recorded runtime summaries distinguish historical Bunya EPYC3/EPYC4 runs from local audit checks. |
+| 7. Explain parallelisation | Checked | README explains parallel_chains, four total chains, sequential datasets and single-process aggregation. |
+| 8. Avoid absolute paths | Checked | Executable input/output paths are package-relative. Recorded provenance and environment files may contain the actual historical machine paths; these are not paths the editor must edit. |
+| 9. Organise code files | Checked | Sources, archived results, mock references and newly generated outputs are separate. A shared generator/coefficient table serves all five scenarios. |
+| 10. Add helpful comments | Checked | Entry scripts and scientific stages are commented; manuscript_map.csv, function-reference.md and manuscript-coverage.md link calculations and outputs to their purpose. |
+| 11. Provide intermediate results | Unchecked; delivery pending | Complete post-rescue production collections and selected local checks exist on the author's machine. Final editor-accessible delivery, link/checksum and selected reference-result bundle are not yet confirmed. Mark only after these are supplied. |
+| 12. Single ZIP without unnecessary files | Unchecked; packaging pending | Final clean code ZIP and documented external archive delivery have not yet been confirmed. Mark after packaging and access checks, not merely because the Git repository is available. |
 
-## Before Checking The Remaining Boxes
+## Before Submission
 
-1. Inspect `validation-report.md` and complete any pending full fits or
-   aggregation checks before claiming they were executed.
-2. Have a coauthor run the final archive independently on another machine.
-3. Confirm whether the journal revision differs from the mapped arXiv v1;
-   disclose restricted-data exceptions and confirm data/code permissions.
-4. Resolve the final delivery location for the large archive and check that the
-   editor can access it without an institutional login.
-5. Fill/sign the essential PDF checklist using these verified statuses. It is
-   intentionally not auto-signed or universally checked by this preparation step.
+- Finalise the ZIP, external archive access and selected local reference records.
+  The detailed checklist's page 3 footnote specifically excludes OneDrive;
+  use a suitable repository or agree a different transfer method with the editor.
+- Have a coauthor test the final package independently and review sampling
+  diagnostics, including any treedepth warnings. Execution is not convergence.
+- Confirm redistribution permissions and whether the journal revision differs
+  from the mapped arXiv version. Retain the restricted-data and Stan qualifications
+  when completing any remaining boxes.
