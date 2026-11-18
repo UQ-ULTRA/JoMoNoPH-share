@@ -9,6 +9,15 @@
 #SBATCH --account=a_uqccr
 #SBATCH --time=00:10:00
 #SBATCH --partition=general
+#SBATCH --output=/dev/null
+#SBATCH --error=/dev/null
+
+export JOB_OUTPUT_DATE="$(date +%Y%m%d)"
+export JOB_OUTPUT_ID="${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}"
+export JOB_OUTPUT_DIR="$HOME/out_${JOB_OUTPUT_DATE}_${JOB_OUTPUT_ID}"
+export JOB_OUTPUT_TASK_SUFFIX="${SLURM_ARRAY_TASK_ID:+_${SLURM_ARRAY_TASK_ID}}"
+mkdir -p "$JOB_OUTPUT_DIR"
+exec > "$JOB_OUTPUT_DIR/${SLURM_JOB_NAME}_${JOB_OUTPUT_ID}${JOB_OUTPUT_TASK_SUFFIX}.out" 2>&1
 
 # --- Load required modules ---
 module purge
