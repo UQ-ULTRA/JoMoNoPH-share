@@ -48,5 +48,5 @@ Stan/*
 
 # Small synthetic audit example and its reference outputs, not clinical data.
 !/reproducibility-BiomJ/case-study/source/mock-data.rds
-!/reproducibility-BiomJ/case-study/reference/mock_table1_update.csv
+!/reproducibility-BiomJ/case-study/reference/mock_table1_update_Windows_AM.csv
 !/reproducibility-BiomJ/case-study/reference/mock_table1_update_*.png

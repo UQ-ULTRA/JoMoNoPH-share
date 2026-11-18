@@ -6,9 +6,9 @@ of universal compliance. Section numbers refer to the supplied six-page
 
 | Item | Evidence / status |
 |---|---|
-| Sections 2-3: code/data and intermediate results | Five complete saved simulation collections; source and three workflows supplied. Mock data substitute is explicitly identified. Final manuscript completeness still needs author confirmation. |
+| Sections 2-3: code/data and intermediate results | Five complete saved simulation collections; source and three workflows supplied. All numbered simulation results in author-selected arXiv v1 are covered. Restricted real-data Table 1 and PH diagnostic p-values are exceptions; mock results are not numerical replacements. See manuscript-coverage.md. |
 | Repeated settings without copied scenario scripts | Shared simulator/coefficient table and local task runner; arbitrary configuration and replicate selection. |
-| Output/result association | manuscript_map.csv links generated outputs and references. Exact final manuscript/supplement numbering remains to be confirmed. |
+| Output/result association | manuscript_map.csv gives exact arXiv:2606.16080v1 numbering/pages. Nine simulation table bodies match; all three figures render identically. Check any subsequent journal-version changes. |
 | RNG and selected-replicate reproduction | Original configuration/replicate seed rule and RNG kinds retained. Controlled cleanup checks passed; see code-equivalence.md. Cross-platform MCMC equality is not claimed. |
 | Monte Carlo stability across seeds | Archived studies use 1,000 independently seeded datasets per configuration. No new full-study reruns or comprehensive method-ranking stability study were performed during cleanup; author must assess/report this item honestly. |
 | Restricted case-study data | Mock data, code, reference results and a completed local mock run supplied. No actual ENZAMET participant data included. |
@@ -26,7 +26,8 @@ of universal compliance. Section numbers refer to the supplied six-page
 
 ## Do Not Certify Yet
 
-Final manuscript coverage, licensing, large-archive access and independent
-reproduction are author-controlled steps. Missing historical environment details
+Any manuscript changes after the mapped version, restricted-data exceptions,
+licensing, large-archive access and independent reproduction require author sign-off.
+Missing historical environment details
 and Stan's cross-platform numerical limitations should be disclosed to the RR
 editor rather than represented as exact reproducibility guarantees.

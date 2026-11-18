@@ -8,8 +8,8 @@ that every final-submission requirement has already been met.
 |---|---|
 | README and software versions | Implemented. README, `--mode=check`, per-run environment records. Historical complete compiler/hardware versions were not all retained. |
 | Exact running instructions / one main file | Start with `run_checks.R` and the root README in RStudio; `main.R` is an optional terminal equivalent. |
-| All code/data for results | Full simulation intermediates and relevant production/aggregation/presentation code included. Mock case-study substitute supplied; actual ENZAMET data not included. Author must confirm that the final manuscript has no additional results outside the map. |
-| Outputs linked to manuscript | `manuscript_map.csv` links descriptive filenames to analysis/results. Final figure/table numbering requires checking against the final submitted PDF. |
+| All code/data for results | Full simulation intermediates and relevant production/aggregation/presentation code included. All numbered simulation results mapped against author-selected arXiv v1. Restricted ENZAMET Table 1 and PH diagnostic p-values are explicit exceptions; mock fitting/results are a procedural substitute only. See manuscript-coverage.md. |
+| Outputs linked to manuscript | `manuscript_map.csv` records exact arXiv:2606.16080v1 table/figure numbers and pages. Nine simulation table bodies match and three figures render identically. Recheck if the journal revision differs. |
 | Seeded simulations | Implemented with original configuration IDs, per-replicate seeds, R RNG kind and chain IDs. Exact cross-platform Stan equality cannot be certified. |
 | Runtime and hardware | Historical runtime summaries included; README describes Bunya EPYC3/EPYC4 and new-run metadata. New local test timings recorded when completed. |
 | Parallelization explained | README documents four chains, sequential datasets and `--parallel-chains`. |
@@ -24,7 +24,8 @@ that every final-submission requirement has already been met.
 1. Inspect `validation-report.md` and complete any pending full fits or
    aggregation checks before claiming they were executed.
 2. Have a coauthor run the final archive independently on another machine.
-3. Confirm final manuscript/supplement output mapping and data/code permissions.
+3. Confirm whether the journal revision differs from the mapped arXiv v1;
+   disclose restricted-data exceptions and confirm data/code permissions.
 4. Resolve the final delivery location for the large archive and check that the
    editor can access it without an institutional login.
 5. Fill/sign the essential PDF checklist using these verified statuses. It is

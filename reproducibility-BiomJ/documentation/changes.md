@@ -1,5 +1,23 @@
 # Changes Made For The Audit Package
 
+## Mock Reference Filenames (19 November 2026)
+
+The four author-supplied reference files now identify the Windows-AM, Windows-DM
+and MacBook-M2Pro-DM runs. Documentation, the manuscript map, manifest paths and
+the CSV Git-ignore exception were updated. All four files retain their original
+checksums. Fresh case-study outputs remain named `mock_table1_update.*`; no
+fitting code, data or result calculations changed.
+
+## Manuscript Output Mapping (19 November 2026)
+
+The map now uses author-selected arXiv:2606.16080v1, including its supplement.
+It identifies all numbered tables/figures, adds four previously omitted
+supplementary tables, separates extra plots from published figures, and records
+restricted real-data exceptions. Nine simulation table bodies match the arXiv
+source; all three published figures render identically under the same renderer.
+See manuscript-coverage.md. Only documentation/metadata changed; no models,
+generated data, saved results or calculation code were altered or rerun.
+
 ## Case-Study Table Namespace Fix (18 November 2026)
 
 The final table explicitly calls `dplyr::select()` so it also works after a

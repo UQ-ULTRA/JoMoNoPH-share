@@ -10,8 +10,13 @@ Do not use a separate case-study project.
 - `mock-data.rds`: 17,623 assessments and 1,105 synthetic survival records.
 - `fit-case-study-model.R`: local fitting/table procedure, seed 10235.
 - Shared Stan model: `production/Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan`.
-- Supplied references: `case-study/reference/`.
+- Supplied numeric reference: `case-study/reference/mock_table1_update_Windows_AM.csv`.
+- Platform screenshots in `case-study/reference/`: `mock_table1_update_Windows_AM.png`,
+  `mock_table1_update_Windows_DM.png` and `mock_table1_update_MacBook_M2Pro_DM.png`.
 - Generated estimates, inputs, draws and diagnostics: `output/case-study/`.
+
+AM and DM identify the reference runs' authors. Fresh results retain the filename
+`output/case-study/mock_table1_update.csv`; reference renaming does not change fitting.
 
 The script's input/initial-value equivalence was checked against the saved
 completed mock fit. Review sampling diagnostics before interpreting estimates.

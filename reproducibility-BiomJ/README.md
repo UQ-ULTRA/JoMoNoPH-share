@@ -95,7 +95,9 @@ task <- "case-study"
 ```
 Source the script to fit the supplied synthetic data. Inspect
 `output/case-study/mock_table1_update.csv` and the saved diagnostics. Compare
-with `case-study/reference/`, **not** the restricted real-data manuscript table.
+with [the supplied Windows-AM reference CSV](case-study/reference/mock_table1_update_Windows_AM.csv)
+and the platform screenshots in `case-study/reference/`, **not** the restricted
+real-data manuscript table. The generated output filename is unchanged.
 
 No other task is needed. Simulation selection settings do not affect this workflow.
 
@@ -319,7 +321,9 @@ Only `run_checks.R` needs editing for routine use. `R/` contains execution
 helpers; `production/` contains local fitting/generation code; `analysis/`
 contains aggregation/presentation code; `case-study/` contains mock inputs and
 references. [manuscript_map.csv](manuscript_map.csv) links outputs to manuscript
-results; `files_manifest.csv` records checksums.
+results using arXiv:2606.16080v1 numbering; the short
+[coverage check](documentation/manuscript-coverage.md) records verification and
+restricted-data exceptions. `files_manifest.csv` records checksums.
 
 Data provenance/definitions are in the [data dictionary](documentation/data_dictionary.md).
 Optional details: [technical guide](documentation/technical-guide.md),
@@ -328,6 +332,7 @@ Optional details: [technical guide](documentation/technical-guide.md),
 
 The [essential](documentation/essential-checklist-response.md) and
 [detailed](documentation/detailed-checklist-response.md) responses identify pending
-author sign-off: manuscript mapping, permissions/licensing, independent-machine
+author sign-off: any later manuscript changes, restricted-data exceptions,
+permissions/licensing, independent-machine
 testing and delivery. The approximately 40.6 GB archive requires an editor-accessible
 repository or transfer link without an institutional login, not email attachment.
