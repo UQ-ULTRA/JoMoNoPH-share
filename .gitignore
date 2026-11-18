@@ -21,6 +21,7 @@ Stan/*
 *.hpp
 
 # Simulation results and generated reports (keep locally; share separately).
+/Bunya/Bunya-simulation-setup.html
 /Bunya/ENZAMET/output*/
 /Bunya/ENZAMET/figures*/
 /Bunya/ENZAMET/summary_tables*/

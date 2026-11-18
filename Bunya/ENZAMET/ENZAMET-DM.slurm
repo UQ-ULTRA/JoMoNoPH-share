@@ -5,7 +5,7 @@
 #SBATCH --exclude=bun091
 #SBATCH --cpus-per-task=20
 #SBATCH --array=1-80
-#SBATCH --mem=20GB
+#SBATCH --mem=16GB
 #SBATCH --time=05:00:00
 #SBATCH --partition=general
 #SBATCH --account=a_uqccr
