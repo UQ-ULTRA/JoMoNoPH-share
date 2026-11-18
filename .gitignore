@@ -19,3 +19,33 @@ Stan/*
 *.zip
 *.csv
 *.hpp
+
+# Simulation results and generated reports (keep locally; share separately).
+/Bunya/ENZAMET/output*/
+/Bunya/ENZAMET/figures*/
+/Bunya/ENZAMET/summary_tables*/
+/Bunya/ENZAMET/out_*/
+/Bunya/Manuscript/tables/
+/Bunya/Manuscript/derived_csv/
+/Bunya/Manuscript/figures/
+/reproducibility-BiomJ/archived-production-results/
+/reproducibility-BiomJ/output/
+/reproducibility-BiomJ/documentation/validation/
+
+# Locally compiled Stan files; retain model source.
+/reproducibility-BiomJ/production/Stan/*
+!/reproducibility-BiomJ/production/Stan/*.stan
+!/reproducibility-BiomJ/production/Stan/*.R
+/reproducibility-BiomJ/case-study/source/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5
+
+# Audit metadata used by the code/documentation, not simulation estimates.
+!/reproducibility-BiomJ/manuscript_map.csv
+!/reproducibility-BiomJ/files_manifest.csv
+!/reproducibility-BiomJ/documentation/source-provenance.csv
+!/reproducibility-BiomJ/documentation/verified-source-cleanup.csv
+!/reproducibility-BiomJ/documentation/original-source-checksums.csv
+
+# Small synthetic audit example and its reference outputs, not clinical data.
+!/reproducibility-BiomJ/case-study/source/mock-data.rds
+!/reproducibility-BiomJ/case-study/reference/mock_table1_update.csv
+!/reproducibility-BiomJ/case-study/reference/mock_table1_update_*.png
