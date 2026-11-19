@@ -1,5 +1,14 @@
 # Changes Made For The Audit Package
 
+## onBunya Linux Linker Workaround (19 November 2026)
+
+README now documents the reported PIE/non-PIE mismatch involving CmdStan's
+`main_threads.o`. The author confirmed that appending `LDFLAGS += -no-pie` to
+their user-owned CmdStan 2.37.0 configuration allowed compilation and sampling
+to start on the onBunya desktop. Completed Linux results have not yet been
+verified. This is an opt-in installation-level workaround, not a change to the
+default build, Stan source, data generation, priors or sampling settings.
+
 ## Mock Reference Filenames (19 November 2026)
 
 The four author-supplied reference files now identify the Windows-AM, Windows-DM

@@ -261,6 +261,28 @@ incompatibility; it does not change the model. Local tests used R 4.5.2,
 CmdStanR 0.9.0 and CmdStan 2.40.0. Full package/compiler versions and loaded-package
 `sessionInfo()` are in [software environment](documentation/software-environment.md).
 
+### Linux PIE Linker Error
+
+If linking fails with `main_threads.o: relocation R_X86_64_32 ... can not be used
+when making a PIE object`, an existing CmdStan object is incompatible with the
+current position-independent-executable (PIE) link settings. The basic toolchain
+check can pass despite this mismatch; `no_pch` addresses a different issue.
+
+On the author's onBunya desktop with a user-owned CmdStan 2.37.0 installation,
+the following one-time setting resolved compilation and allowed sampling to start:
+```r
+cmdstanr::cmdstan_make_local(
+  cpp_options = list("LDFLAGS += -no-pie"),
+  append = TRUE
+)
+```
+Use this only for this Linux/GCC error and your own writable installation, then
+rerun the selected task. It persists in that installation's `make/local` for
+subsequent builds; do not modify shared installations or apply it routinely on
+other platforms. It changes linking, not the statistical model or MCMC settings.
+See [CmdStanR build configuration](https://mc-stan.org/cmdstanr/reference/install_cmdstan.html)
+and [GCC linker options](https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html).
+
 ## Outputs And References
 
 **`archived-production-results/` contains the supplied historical results and
