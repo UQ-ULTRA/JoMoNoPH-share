@@ -1,10 +1,11 @@
 # Essential Checklist: Responses And Mark Review
 
 Reviewed on 19 November 2026 against
-`Checklist_for_authors_essential_V1.0_completed.pdf`. The first ten boxes are
-checked; the final two are unchecked. Those marks are appropriate for the
-current preparation stage, subject to the qualifications below. The PDF was
-not changed. These notes accompany, rather than replace, the completed checklist.
+`Checklist_for_authors_essential_V1.0_completed.pdf`. All twelve boxes are now
+checked. The final two marks depend on supplying the final ZIP and an accessible
+results download with the submission; this review does not verify delivery.
+The PDF was not changed. These notes accompany, rather than replace, the
+completed checklist.
 
 | Essential item (PDF order) | Observed mark | Response / qualification |
 |---|---|---|
@@ -18,8 +19,8 @@ not changed. These notes accompany, rather than replace, the completed checklist
 | 8. Avoid absolute paths | Checked | Executable input/output paths are package-relative. Recorded provenance and environment files may contain the actual historical machine paths; these are not paths the editor must edit. |
 | 9. Organise code files | Checked | Sources, archived results, mock references and newly generated outputs are separate. A shared generator/coefficient table serves all five scenarios. |
 | 10. Add helpful comments | Checked | Entry scripts and scientific stages are commented; manuscript_map.csv, function-reference.md and manuscript-coverage.md link calculations and outputs to their purpose. |
-| 11. Provide intermediate results | Unchecked; delivery pending | Complete post-rescue production collections and selected local checks exist on the author's machine. Final editor-accessible delivery, link/checksum and selected reference-result bundle are not yet confirmed. Mark only after these are supplied. |
-| 12. Single ZIP without unnecessary files | Unchecked; packaging pending | Final clean code ZIP and documented external archive delivery have not yet been confirmed. Mark after packaging and access checks, not merely because the Git repository is available. |
+| 11. Provide intermediate results | Checked; delivery qualification | Complete post-rescue production collections and selected local reference results are prepared for separate sharing. Supply the editor-accessible download link with the submission; link access was not verified in this review. |
+| 12. Single ZIP without unnecessary files | Checked; packaging qualification | Supply the final clean code ZIP together with the separately hosted large archive. This mark records the intended submission contents; ZIP creation and delivery were not verified in this review. |
 
 ## Before Submission
 
@@ -33,4 +34,4 @@ not changed. These notes accompany, rather than replace, the completed checklist
   and manuscript-regeneration checks are documented separately.
 - Confirm redistribution permissions and whether the journal revision differs
   from the mapped arXiv version. Retain the restricted-data and Stan qualifications
-  when completing any remaining boxes.
+  in the submission.

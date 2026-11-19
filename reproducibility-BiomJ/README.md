@@ -360,8 +360,9 @@ Optional details: [technical guide](documentation/technical-guide.md),
 [terminal commands](documentation/command-line.md).
 
 The [essential](documentation/essential-checklist-response.md) and
-[detailed](documentation/detailed-checklist-response.md) responses identify pending
-author sign-off: any later manuscript changes, restricted-data exceptions,
-permissions/licensing, independent-machine
-testing and delivery. The approximately 40.6 GB archive requires an editor-accessible
+[detailed](documentation/detailed-checklist-response.md) responses record the
+completed checkmarks and qualifications, including restricted-data exceptions,
+permissions/licensing and delivery. Independent coauthor testing covers the mock
+case study; author-run simulation and regeneration checks are documented separately.
+The approximately 40.6 GB archive requires an editor-accessible
 repository or transfer link without an institutional login, not email attachment.

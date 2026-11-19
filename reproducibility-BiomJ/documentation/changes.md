@@ -1,5 +1,13 @@
 # Changes Made For The Audit Package
 
+## Updated Checklist Marks (19 November 2026)
+
+All seven pages of the updated completed checklists were visually reviewed.
+The essential form now has all twelve boxes checked; the detailed form has
+34 checked and four unchecked boxes. Responses and README reflect these marks,
+retain the existing qualifications, and distinguish marked delivery items from
+verified ZIP submission or download access. The PDFs were not edited.
+
 ## Check Wording And Independent Mock Check (19 November 2026)
 
 The concluding `check` message now describes a setup-only check, with detailed
