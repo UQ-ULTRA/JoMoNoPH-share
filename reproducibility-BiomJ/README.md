@@ -61,8 +61,8 @@ least **100 GB free disk space before downloading** for a typical selected audit
 including room for both a downloaded ZIP and its extracted files, R/CmdStan and
 generated outputs. More may be needed for many additional fits/raw Stan CSVs.
 Keep the archive locally available, not cloud-only placeholders. A mock-case-study
-check alone does not need this archive; in that case skip the archive inventory
-task `"check"` and go directly to Workflow 1 after installing dependencies.
+check alone does not need this archive. The `"check"` task reports its absence as
+a warning but still checks the mock inputs, software and other available components.
 
 ## Start Here
 
@@ -76,7 +76,14 @@ without RStudio, work in this folder and use `source("run_checks.R")`.
 
 Install missing dependencies using [Software Setup](#software-setup), then run
 **`task <- "check"` once** to inventory files/packages and record the environment
-in `output/check/`. This setup check does not fit models or certify agreement.
+in `output/check/`. It continues after missing components or failed check stages,
+prints a PASS/WARNING summary, and issues one concluding warning listing unresolved
+items. Review `output/check/check-summary.csv`; archive/package inventories and
+the configuration grid are also saved where possible. If outputs cannot be
+written, use the console summary. Missing archives do not prevent a mock-only run,
+but simulation comparisons and archived-result regeneration still need their inputs.
+This check does not compile/fit a model, validate every RDS file or certify convergence;
+even a passing basic toolchain check may not detect a model-specific linker error.
 
 ## Three Main Workflows
 

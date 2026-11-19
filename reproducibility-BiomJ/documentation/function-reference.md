@@ -58,7 +58,7 @@ labels and output directories; they are not separate entry points.
 | `audit_analysis_environment` | None | Private script environment with explicit dplyr aliases; no writes |
 | `audit_results` | root, summaries | Writes manuscript tables/figures from summary files |
 | `audit_aggregate` | root, collection | Writes collection summary tables and diagnostic plots |
-| `audit_check` | root | Prints inventories and writes environment/configuration records |
+| `audit_check` | root, cmdstan | Returns PASS/WARNING table; writes check-summary.csv and available inventories/environment/grid; continues after missing components and emits one concluding warning |
 | `audit_manifest` | root | Writes file-size/checksum CSV |
 
 ## R/entry.R

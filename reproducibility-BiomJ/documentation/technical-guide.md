@@ -36,7 +36,12 @@ Rscript main.R --mode=spot-check --collection=main --config-ids=1 --n-reps=5 --n
 Rscript main.R --mode=case-study
 ```
 
-`check` inventories the five saved collections and dependencies. `results`
+`check` inventories the five saved collections, mock inputs, dependencies and
+CmdStan/basic toolchain. Missing components and failed stages are reported without
+stopping the other checks. The final PASS/WARNING table is returned and saved as
+`output/check/check-summary.csv` where writable, with one concluding warning if
+anything remains unresolved. No model is compiled; passing does not guarantee
+successful model linking or convergence. `results`
 regenerates manuscript-facing CSV, LaTeX and PDF/PNG files from the supplied
 summary tables. `prepare` regenerates the selected datasets, fits the preliminary
 models and saves all Stan inputs/initial values, **without sampling**. It checks

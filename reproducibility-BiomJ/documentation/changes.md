@@ -1,5 +1,16 @@
 # Changes Made For The Audit Package
 
+## Overall Preflight Check (19 November 2026)
+
+`check` now continues through missing archive collections, mock inputs, packages,
+CmdStan/toolchain components and failed recording/export stages. It returns and
+saves a PASS/WARNING table and emits one final summary warning, rather than
+stopping at the first missing archive. Invalid explicit CmdStan paths and a
+missing configuration preview are reported within this task; other tasks retain
+their existing strict input checks. Tests cover incomplete and complete fixtures
+without model compilation or MCMC. No fitting, data-generation or aggregation
+calculations changed, and no installed software is modified automatically.
+
 ## onBunya Linux Linker Workaround (19 November 2026)
 
 README now documents the reported PIE/non-PIE mismatch involving CmdStan's

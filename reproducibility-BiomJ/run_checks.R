@@ -55,9 +55,15 @@ for (helper in c("audit.R", "simulation.R", "export-local.R", "session.R", "entr
 # 4. Inspect the available settings, then run the selected task -------------
 # View(configurations) in RStudio to see the full grid. Changing collection,
 # config_ids or replicates selects datasets; it does not alter the model.
-configurations <- audit_grid(root)
-print(configurations[, c("full_config_id", "baseline_label", "scenario",
-                          "cens_label", "max_FU")], row.names = FALSE)
+configurations <- tryCatch(audit_grid(root), error = function(e) {
+  if (task != "check") stop(e)
+  message("Configuration preview unavailable; the overall check will report it.")
+  NULL
+})
+if (!is.null(configurations)) {
+  print(configurations[, c("full_config_id", "baseline_label", "scenario",
+                            "cens_label", "max_FU")], row.names = FALSE)
+}
 message("Selected task: ", task, "; collection: ", collection)
 audit_result <- audit_run(root, task, collection, config_ids, replicates,
                           parallel_chains, cmdstan, no_pch, resume, summaries)

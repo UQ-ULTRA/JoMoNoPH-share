@@ -12,7 +12,7 @@ e$audit_simulations <- function(root, collection, config_ids, replicates, mode,
     replicates = replicates, mode = mode, parallel_chains = parallel_chains,
     resume = resume, no_pch = Sys.getenv("BIOMJ_DISABLE_PCH"))
 }
-e$audit_check <- function(root) "check"
+e$audit_check <- function(root, cmdstan = "") "check"
 e$audit_results <- function(root, summaries) summaries
 e$audit_aggregate <- function(root, collection) collection
 e$audit_export_local <- function(root, quiet) list(task = "records", quiet = quiet)

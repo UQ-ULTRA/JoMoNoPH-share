@@ -265,23 +265,125 @@ audit_aggregate <- function(root, collection) {
   }
 }
 
-audit_check <- function(root) {
-  x <- audit_collections(root)
-  x$expected_batches <- c(10000L, 2500L, 2500L, 2500L, 4000L)
-  x$found_batches <- vapply(x$input, function(p) length(list.files(p, "\\.rds$", recursive = FALSE)), integer(1))
-  x$summary_available <- dir.exists(x$saved_summary)
-  print(x[, c("collection", "expected_batches", "found_batches", "summary_available")], row.names = FALSE)
-  if (any(x$expected_batches != x$found_batches) || !all(x$summary_available)) stop("Result archive incomplete.")
-  if (!file.exists(file.path(root, "case-study", "source", "mock-data.rds"))) stop("Missing mock data.")
+audit_check <- function(root, cmdstan = "") {
+  rows <- list()
+  # A failed inventory/build-environment check must not hide the other results.
+  inspect <- function(item, expr, success = "Available") {
+    notes <- character()
+    value <- tryCatch(withCallingHandlers(force(expr), warning = function(w) {
+      notes <<- c(notes, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }), error = function(e) {
+      notes <<- c(notes, conditionMessage(e))
+      NULL
+    })
+    detail <- if (length(notes)) paste(unique(notes), collapse = "; ") else
+      if (is.character(value) && length(value) == 1L) value else success
+    rows[[length(rows) + 1L]] <<- data.frame(
+      item = item, status = if (length(notes)) "WARNING" else "PASS", detail = detail
+    )
+    if (length(notes)) message("WARNING [", item, "]: ", detail)
+    value
+  }
+  out <- file.path(root, "output", "check")
+  inspect("Output directory", {
+    if (!dir.exists(out) && !dir.create(out, recursive = TRUE)) {
+      stop("Cannot create ", out)
+    }
+    if (file.access(out, 2) != 0) stop("Output directory is not writable: ", out)
+  })
+  x <- inspect("Archive paths", audit_collections(root))
+  if (!is.null(x)) {
+    x$expected_batches <- c(10000L, 2500L, 2500L, 2500L, 4000L)
+    x$found_batches <- NA_integer_
+    x$summary_available <- FALSE
+    for (i in seq_len(nrow(x))) {
+      inspect(paste("Archive batches", x$collection[i]), {
+        if (!dir.exists(x$input[i])) stop("Missing folder: ", x$input[i])
+        if (file.access(x$input[i], 4) != 0) stop("Cannot read ", x$input[i])
+        x$found_batches[i] <- length(list.files(x$input[i], "\\.rds$"))
+        if (x$found_batches[i] != x$expected_batches[i]) {
+          stop("Found ", x$found_batches[i], "; expected ", x$expected_batches[i])
+        }
+        paste(x$found_batches[i], "batch files; contents not validated")
+      })
+      inspect(paste("Saved summaries", x$collection[i]), {
+        x$summary_available[i] <- dir.exists(x$saved_summary[i])
+        if (!x$summary_available[i]) stop("Missing folder: ", x$saved_summary[i])
+        if (file.access(x$saved_summary[i], 4) != 0) stop("Cannot read summaries")
+      })
+    }
+    print(x[, c("collection", "expected_batches", "found_batches", "summary_available")],
+      row.names = FALSE)
+    inspect("Archive inventory export", {
+      write.csv(x, file.path(out, "archive-inventory.csv"), row.names = FALSE)
+    }, "Saved archive-inventory.csv")
+  }
+  files <- c("Mock data" = "case-study/source/mock-data.rds",
+    "Mock fitting script" = "case-study/source/fit-case-study-model.R",
+    "Stan source" = "production/Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan")
+  for (item in names(files)) inspect(item, {
+    path <- file.path(root, files[[item]])
+    if (!file.exists(path) || file.access(path, 4) != 0) {
+      stop("Missing or unreadable file: ", path)
+    }
+  })
   # Include tidyverse components used by the scripts in the loaded session record.
   p <- c("tidyverse", "dplyr", "ggplot2", "purrr", "readr", "stringr", "tibble",
          "tidyr", "forcats", "lubridate", "survival", "nlme", "MASS", "cmdstanr",
          "posterior", "loo", "patchwork", "JMbayes2", "coda")
-  versions <- data.frame(package = p, installed = vapply(p, requireNamespace, logical(1), quietly = TRUE))
+  versions <- data.frame(package = p, installed = FALSE, version = NA_character_)
+  for (i in seq_along(p)) inspect(paste("R package", p[i]), {
+    versions$installed[i] <- requireNamespace(p[i], quietly = TRUE)
+    if (!versions$installed[i]) stop("Not installed or cannot load; see Software Setup")
+    versions$version[i] <- as.character(utils::packageVersion(p[i]))
+    paste("Version", versions$version[i])
+  })
   print(versions, row.names = FALSE)
-  audit_environment(file.path(root, "output", "check"))
-  write.csv(audit_grid(root), file.path(root, "output", "check", "configurations.csv"), row.names = FALSE)
-  message("Archive count check passed. This does not certify every fit's diagnostics.")
+  inspect("Package inventory export", {
+    write.csv(versions, file.path(out, "packages.csv"), row.names = FALSE)
+  }, "Saved packages.csv")
+  inspect("CmdStan installation", {
+    if (!isTRUE(versions$installed[p == "cmdstanr"])) stop("CmdStanR unavailable")
+    if (nzchar(cmdstan)) cmdstanr::set_cmdstan_path(path.expand(cmdstan))
+    paste(cmdstanr::cmdstan_path(), "version", cmdstanr::cmdstan_version())
+  })
+  inspect("Basic C++ toolchain", {
+    if (!isTRUE(versions$installed[p == "cmdstanr"])) stop("CmdStanR unavailable")
+    cmdstanr::check_cmdstan_toolchain()
+    "Basic toolchain check passed; no model compiled"
+  })
+  grid <- inspect("Configuration grid", audit_grid(root), "40 configurations")
+  if (!is.null(grid)) inspect("Configuration grid export", {
+    write.csv(grid, file.path(out, "configurations.csv"), row.names = FALSE)
+  }, "Saved configurations.csv")
+  inspect("Environment record", audit_environment(out), "Environment files recorded")
+  report <- do.call(rbind, rows)
+  report$checked_at_utc <- format(Sys.time(), tz = "UTC", usetz = TRUE)
+  save_notes <- character()
+  tryCatch(withCallingHandlers(
+    write.csv(report, file.path(out, "check-summary.csv"), row.names = FALSE),
+    warning = function(w) {
+      save_notes <<- c(save_notes, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }), error = function(e) save_notes <<- c(save_notes, conditionMessage(e)))
+  if (length(save_notes)) {
+    inspect("Check summary export", stop(paste(unique(save_notes), collapse = "; ")))
+    report <- rbind(report, data.frame(rows[[length(rows)]],
+      checked_at_utc = report$checked_at_utc[1]))
+  }
+  print(report[, c("item", "status", "detail")], row.names = FALSE)
+  bad <- report$status == "WARNING"
+  message("Overall check completed: ", sum(!bad), " passed; ", sum(bad), " warning item(s).")
+  message("No model was compiled or fitted; archive contents and convergence are not certified.")
+  if (any(bad)) warning(paste(c(
+    "Overall check completed with unresolved items:",
+    paste0("- ", report$item[bad], ": ", report$detail[bad]),
+    "Resolve the items needed by your chosen workflow.",
+    if (!length(save_notes)) "See output/check/check-summary.csv." else
+      "The summary could not be saved; use the console report above."
+  ), collapse = "\n"), call. = FALSE)
+  invisible(report)
 }
 
 audit_manifest <- function(root) {

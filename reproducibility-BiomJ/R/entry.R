@@ -39,10 +39,12 @@ audit_run <- function(root, task = "plan", collection = "main", config_ids = NUL
 
   # The session guard restores build and prior options after every task.
   Sys.setenv(BIOMJ_DISABLE_PCH = if (no_pch) "true" else "false")
-  if (nzchar(cmdstan)) cmdstanr::set_cmdstan_path(path.expand(cmdstan))
+  if (nzchar(cmdstan) && task != "check") {
+    cmdstanr::set_cmdstan_path(path.expand(cmdstan))
+  }
 
   if (task == "check") {
-    audit_check(root)
+    audit_check(root, cmdstan = cmdstan)
   } else if (task == "results") {
     audit_results(root, summaries)
   } else if (task == "aggregate") {
