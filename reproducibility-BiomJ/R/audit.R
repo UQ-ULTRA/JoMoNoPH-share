@@ -375,7 +375,7 @@ audit_check <- function(root, cmdstan = "") {
   print(report[, c("item", "status", "detail")], row.names = FALSE)
   bad <- report$status == "WARNING"
   message("Overall check completed: ", sum(!bad), " passed; ", sum(bad), " warning item(s).")
-  message("No model was compiled or fitted; archive contents and convergence are not certified.")
+  message("Setup check only; detailed result validation and MCMC diagnostics are assessed separately.")
   if (any(bad)) warning(paste(c(
     "Overall check completed with unresolved items:",
     paste0("- ", report$item[bad], ": ", report$detail[bad]),

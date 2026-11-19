@@ -1,5 +1,13 @@
 # Changes Made For The Audit Package
 
+## Check Wording And Independent Mock Check (19 November 2026)
+
+The concluding `check` message now describes a setup-only check, with detailed
+result validation and MCMC diagnostics assessed separately. Check behaviour is
+unchanged. Checklist responses record PM's independently run mock-case-study
+table screenshot without implying independent testing of all workflows or a
+sampling-diagnostic assessment. No scientific calculations or results changed.
+
 ## Overall Preflight Check (19 November 2026)
 
 `check` now continues through missing archive collections, mock inputs, packages,

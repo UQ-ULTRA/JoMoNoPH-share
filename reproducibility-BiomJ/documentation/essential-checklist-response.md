@@ -26,8 +26,11 @@ not changed. These notes accompany, rather than replace, the completed checklist
 - Finalise the ZIP, external archive access and selected local reference records.
   The detailed checklist's page 3 footnote specifically excludes OneDrive;
   use a suitable repository or agree a different transfer method with the editor.
-- Have a coauthor test the final package independently and review sampling
-  diagnostics, including any treedepth warnings. Execution is not convergence.
+- A coauthor (PM) independently ran Workflow 1; the supplied
+  `case-study/reference/mock_table1_update_Windows_PM.png` records the mock
+  estimates. This is case-study evidence, not an independent check of the full
+  simulation workflows or their sampling diagnostics. The author's simulation
+  and manuscript-regeneration checks are documented separately.
 - Confirm redistribution permissions and whether the journal revision differs
   from the mapped arXiv version. Retain the restricted-data and Stan qualifications
   when completing any remaining boxes.

@@ -10,7 +10,7 @@ certification that every checked sentence is literally satisfied.
 
 | Page / item opening | Current mark | Response / recommended action |
 |---|---|---|
-| 1, Section 2: "We have verified that re-running..." | Unchecked | Keep pending until a coauthor has independently tested the final package. Local simulation reaggregation and manuscript-output checks passed, but restricted real-data results have a mock-data substitute. |
+| 1, Section 2: "We have verified that re-running..." | Unchecked | Can be checked with the stated qualifications: author-run simulation reaggregation and manuscript-output checks passed; PM independently ran Workflow 1, recorded in mock_table1_update_Windows_PM.png. Independent checking covers the mock case study, not all workflows. Restricted real-data results have a mock-data substitute, and cross-platform MCMC identity is not claimed. |
 | 1, Section 2: "The code and data supplement has been uploaded..." | Unchecked | Final clean ZIP, external archive link/checksum and delivery/access verification are still pending. |
 | 2, RNG: "By re-running any code... multiple times with different seeds..." | Unchecked | Appropriate. Production uses 1,000 independently seeded datasets per configuration, but an additional full-study rerun demonstrating unchanged rankings/conclusions has not been established. No such result is claimed. |
 | 3, restricted data: "The original data has been made available..." | Unchecked | Appropriate: restricted ENZAMET data are not supplied. The preceding synthetic/pseudo-data option is checked and is the chosen alternative. |
@@ -45,9 +45,12 @@ Source/input cleanup checks and existing local fits are documented in
 code-equivalence.md and validation-report.md. Nine simulation table bodies and
 all three published figures were compared with the arXiv source; see
 manuscript-coverage.md. These checks do not establish exact cross-platform
-sampling or independent testing of the final submission ZIP.
+sampling or independent testing of the final submission ZIP. A coauthor (PM)
+has independently run Workflow 1; its mock estimate screenshot is included as
+case-study evidence, not a full-workflow or convergence assessment.
 
 Recommended PDF revisions are to check the documented parallelisation item and
 to qualify or clear the exact-identity, line-length and published-code-only
-claims above. Author decisions, permissions, archive delivery and independent
-testing remain outstanding. The copied PDFs were deliberately left unchanged.
+claims above. Author decisions, permissions and archive delivery remain to be
+confirmed; independent testing currently covers Workflow 1 only. The copied
+PDFs were deliberately left unchanged.
