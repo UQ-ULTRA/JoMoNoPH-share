@@ -11,11 +11,11 @@ Do not use a separate case-study project.
 - `fit-case-study-model.R`: local fitting/table procedure, seed 10235.
 - Shared Stan model: `production/Stan/Bernstein-Polynomials-JM-Hist-alt-DM-Gamma5.stan`.
 - Supplied numeric reference: `case-study/reference/mock_table1_update_Windows_AM.csv`.
-- Platform screenshots in `case-study/reference/`: `mock_table1_update_Windows_AM.png`,
-  `mock_table1_update_Windows_DM.png` and `mock_table1_update_MacBook_M2Pro_DM.png`.
+- Platform screenshots: `case-study/reference/mock_table1_update_*.png`, covering
+  Windows (AM, DM, PM), MacBook M2 Pro (DM) and the onBunya Linux desktop (DM).
 - Generated estimates, inputs, draws and diagnostics: `output/case-study/`.
 
-AM and DM identify the reference runs' authors. Fresh results retain the filename
+AM, DM and PM identify the reference runs' authors. Fresh results retain the filename
 `output/case-study/mock_table1_update.csv`; reference renaming does not change fitting.
 
 The script's input/initial-value equivalence was checked against the saved
